@@ -107,6 +107,19 @@ const Icons = {
       <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
     </svg>
   ),
+  upload: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17,8 12,3 7,8" />
+      <line x1="12" y1="3" x2="12" y2="15" />
+    </svg>
+  ),
+  skip: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <polygon points="5,4 15,12 5,20" />
+      <line x1="19" y1="5" x2="19" y2="19" />
+    </svg>
+  ),
 };
 
 // Media types
@@ -272,6 +285,7 @@ function SignInForm() {
 
 function Content() {
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [editingEntry, setEditingEntry] = useState<MediaEntry | null>(null);
   const [typeFilter, setTypeFilter] = useState<MediaType | "all">("all");
   const [sortOption, setSortOption] = useState<SortOption>("dateNewest");
@@ -303,14 +317,19 @@ function Content() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex justify-center">
+      <div className="flex justify-center gap-2">
         <button className="btn btn-primary" onClick={() => setShowAddForm(true)}>
           {Icons.plus}
-          <span>Add Entry</span>
+          <span>Add</span>
+        </button>
+        <button className="btn btn-secondary" onClick={() => setShowImport(true)}>
+          {Icons.upload}
+          <span>Import</span>
         </button>
       </div>
 
       {showAddForm && <EntryModal onClose={() => setShowAddForm(false)} />}
+      {showImport && <ImportModal onClose={() => setShowImport(false)} />}
       {editingEntry && <EntryModal entry={editingEntry} onClose={() => setEditingEntry(null)} />}
 
       <div className="filter-bar">
@@ -583,6 +602,269 @@ function MediaEntryCard({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// CSV parsing for favourites.me format
+interface ImportedEntry {
+  title: string;
+  type: MediaType;
+  originalRating: number;
+  dateWatched: number;
+  notes: string;
+}
+
+function parseCSV(text: string): ImportedEntry[] {
+  const lines = text.trim().split('\n');
+  if (lines.length < 2) return [];
+
+  // Skip header
+  const entries: ImportedEntry[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.trim()) continue;
+
+    // Parse CSV with quoted fields
+    const fields: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let j = 0; j < line.length; j++) {
+      const char = line[j];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        fields.push(current);
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    fields.push(current);
+
+    // Map fields: title,type,rating,dateWatched,notes,status
+    const [title, rawType, rating, dateWatched, notes] = fields;
+
+    if (!title?.trim()) continue;
+
+    // Map type from favourites.me format to our format
+    const typeMap: Record<string, MediaType> = {
+      'movie': 'movie',
+      'film': 'movie',
+      'book': 'book',
+      'tv': 'tvshow',
+      'tvshow': 'tvshow',
+      'show': 'tvshow',
+      'game': 'videogame',
+      'videogame': 'videogame',
+      'boardgame': 'boardgame',
+      'board': 'boardgame',
+    };
+
+    const type = typeMap[rawType?.toLowerCase().trim()] ?? 'movie';
+    const originalRating = parseInt(rating) || 50;
+    const date = dateWatched ? new Date(dateWatched).getTime() : Date.now();
+
+    entries.push({
+      title: title.trim(),
+      type,
+      originalRating,
+      dateWatched: date,
+      notes: notes?.trim() ?? '',
+    });
+  }
+
+  return entries;
+}
+
+function ImportModal({ onClose }: { onClose: () => void }) {
+  const addEntry = useMutation(api.mediaEntries.addMediaEntry);
+
+  const [importType, setImportType] = useState<'favourites.me'>('favourites.me');
+  const [entries, setEntries] = useState<ImportedEntry[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [headRating, setHeadRating] = useState(2);
+  const [heartRating, setHeartRating] = useState(2);
+  const [loading, setLoading] = useState(false);
+  const [importedCount, setImportedCount] = useState(0);
+  const [skippedCount, setSkippedCount] = useState(0);
+
+  const currentEntry = entries[currentIndex];
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const parsed = parseCSV(text);
+      setEntries(parsed);
+      setCurrentIndex(0);
+      setHeadRating(2);
+      setHeartRating(2);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleImport = async () => {
+    if (!currentEntry) return;
+    setLoading(true);
+
+    try {
+      await addEntry({
+        title: currentEntry.title,
+        type: currentEntry.type,
+        headRating,
+        heartRating,
+        dateWatched: currentEntry.dateWatched,
+        notes: currentEntry.notes || undefined,
+      });
+      setImportedCount(c => c + 1);
+      moveToNext();
+    } catch (error) {
+      console.error('Failed to import:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSkip = () => {
+    setSkippedCount(c => c + 1);
+    moveToNext();
+  };
+
+  const moveToNext = () => {
+    if (currentIndex < entries.length - 1) {
+      setCurrentIndex(currentIndex + 1);
+      setHeadRating(2);
+      setHeartRating(2);
+    } else {
+      // Done
+      setEntries([]);
+    }
+  };
+
+  // Final summary
+  if (entries.length > 0 && currentIndex >= entries.length - 1 && !currentEntry) {
+    return (
+      <div className="modal-overlay" onClick={onClose}>
+        <div className="modal-content" onClick={e => e.stopPropagation()}>
+          <h2 className="text-xl mb-4 text-center">Import Complete</h2>
+          <div className="text-center py-4">
+            <p className="text-lg">Imported: <strong>{importedCount}</strong></p>
+            <p className="opacity-70">Skipped: {skippedCount}</p>
+          </div>
+          <button className="btn btn-primary w-full" onClick={onClose}>Done</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={e => e.stopPropagation()}>
+        <h2 className="text-xl mb-4 text-center">Import</h2>
+
+        {entries.length === 0 ? (
+          <div className="flex flex-col gap-3">
+            <div>
+              <label className="block mb-1 opacity-70 text-sm">Import Type</label>
+              <select
+                className="select w-full"
+                value={importType}
+                onChange={e => setImportType(e.target.value as 'favourites.me')}
+              >
+                <option value="favourites.me">favourites.me</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block mb-1 opacity-70 text-sm">CSV File</label>
+              <input
+                type="file"
+                accept=".csv"
+                onChange={handleFileUpload}
+                className="input w-full"
+              />
+            </div>
+
+            <div className="text-sm opacity-60 mt-2">
+              <p>Expected format:</p>
+              <code className="text-xs block bg-black/10 p-2 rounded mt-1">
+                title,type,rating,dateWatched,notes,status
+              </code>
+            </div>
+
+            <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {/* Progress */}
+            <div className="text-center text-sm opacity-70">
+              Entry {currentIndex + 1} of {entries.length}
+            </div>
+
+            {/* Current Entry Details */}
+            {currentEntry && (
+              <>
+                <div className="card bg-[var(--color-lavender)]/20 p-3">
+                  <h3 className="font-bold text-lg">{currentEntry.title}</h3>
+                  <div className="flex gap-2 mt-2 text-sm opacity-80 flex-wrap">
+                    <span className={`type-badge type-${currentEntry.type}`}>
+                      {MEDIA_TYPES.find(t => t.value === currentEntry.type)?.icon}
+                      {' '}
+                      {MEDIA_TYPES.find(t => t.value === currentEntry.type)?.label}
+                    </span>
+                    <span>Original: {currentEntry.originalRating}/100</span>
+                  </div>
+                  {currentEntry.notes && (
+                    <p className="text-sm opacity-70 mt-2 italic">"{currentEntry.notes}"</p>
+                  )}
+                </div>
+
+                {/* Rating Selection */}
+                <div>
+                  <label className="block mb-1 opacity-70 text-sm">Set Head & Heart Rating</label>
+                  <RatingGrid
+                    headRating={headRating}
+                    heartRating={heartRating}
+                    onSelect={(head, heart) => {
+                      setHeadRating(head);
+                      setHeartRating(heart);
+                    }}
+                  />
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-2">
+                  <button
+                    className="btn btn-ghost flex-1"
+                    onClick={handleSkip}
+                  >
+                    {Icons.skip}
+                    <span>Skip</span>
+                  </button>
+                  <button
+                    className="btn btn-primary flex-1"
+                    onClick={handleImport}
+                    disabled={loading}
+                  >
+                    {Icons.plus}
+                    <span>{loading ? '...' : 'Import'}</span>
+                  </button>
+                </div>
+
+                <button className="btn btn-ghost btn-sm text-sm" onClick={onClose}>
+                  Cancel Import
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
