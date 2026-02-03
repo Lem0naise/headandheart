@@ -9,7 +9,7 @@ import {
 } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, JSX } from "react";
 import { Id } from "../convex/_generated/dataModel";
 
 // SVG Icons
