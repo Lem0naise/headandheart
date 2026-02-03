@@ -12,32 +12,138 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { useState, useMemo } from "react";
 import { Id } from "../convex/_generated/dataModel";
 
+// SVG Icons
+const Icons = {
+  logo: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 21C12 21 4 13.5 4 8.5C4 5.5 6.5 3 9.5 3C11.04 3 12.54 3.64 13.64 4.74L12 6.5L10.36 4.74C9.26 3.64 9 3 9.5 3" />
+      <circle cx="16" cy="6" r="3" />
+    </svg>
+  ),
+  menu: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="18" x2="21" y2="18" />
+    </svg>
+  ),
+  close: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  ),
+  signOut: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <polyline points="16,17 21,12 16,7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+  ),
+  home: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <polyline points="9,22 9,12 15,12 15,22" />
+    </svg>
+  ),
+  plus: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  ),
+  edit: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </svg>
+  ),
+  trash: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <polyline points="3,6 5,6 21,6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    </svg>
+  ),
+  movie: (
+    <svg viewBox="0 0 24 24" fill="currentColor">
+      <path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z" />
+    </svg>
+  ),
+  book: (
+    <svg viewBox="0 0 24 24" fill="currentColor">
+      <path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z" />
+    </svg>
+  ),
+  tv: (
+    <svg viewBox="0 0 24 24" fill="currentColor">
+      <path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z" />
+    </svg>
+  ),
+  game: (
+    <svg viewBox="0 0 24 24" fill="currentColor">
+      <path d="M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-10 7H8v3H6v-3H3v-2h3V8h2v3h3v2zm4.5 2c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm4-3c-.83 0-1.5-.67-1.5-1.5S18.67 9 19.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" />
+    </svg>
+  ),
+  dice: (
+    <svg viewBox="0 0 24 24" fill="currentColor">
+      <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM7.5 18c-.83 0-1.5-.67-1.5-1.5S6.67 15 7.5 15s1.5.67 1.5 1.5S8.33 18 7.5 18zm0-9C6.67 9 6 8.33 6 7.5S6.67 6 7.5 6 9 6.67 9 7.5 8.33 9 7.5 9zm4.5 4.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm4.5 4.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm0-9c-.83 0-1.5-.67-1.5-1.5S15.67 6 16.5 6s1.5.67 1.5 1.5S17.33 9 16.5 9z" />
+    </svg>
+  ),
+  empty: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <line x1="9" y1="9" x2="15" y2="15" />
+      <line x1="15" y1="9" x2="9" y2="15" />
+    </svg>
+  ),
+  head: (
+    <svg viewBox="0 0 24 24" fill="currentColor">
+      <circle cx="12" cy="8" r="5" />
+      <path d="M12 14c-4 0-8 2-8 5v2h16v-2c0-3-4-5-8-5z" />
+    </svg>
+  ),
+  heart: (
+    <svg viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+    </svg>
+  ),
+};
+
 // Media types
 type MediaType = "movie" | "book" | "tvshow" | "videogame" | "boardgame";
 
-const MEDIA_TYPES: { value: MediaType; label: string; emoji: string }[] = [
-  { value: "movie", label: "Movie", emoji: "🎬" },
-  { value: "book", label: "Book", emoji: "📚" },
-  { value: "tvshow", label: "TV Show", emoji: "📺" },
-  { value: "videogame", label: "Video Game", emoji: "🎮" },
-  { value: "boardgame", label: "Board Game", emoji: "🎲" },
+const MEDIA_TYPES: { value: MediaType; label: string; icon: JSX.Element }[] = [
+  { value: "movie", label: "Movie", icon: Icons.movie },
+  { value: "book", label: "Book", icon: Icons.book },
+  { value: "tvshow", label: "TV", icon: Icons.tv },
+  { value: "videogame", label: "Game", icon: Icons.game },
+  { value: "boardgame", label: "Board", icon: Icons.dice },
 ];
 
-// Rating labels for 2D grid corners
 const RATING_LABELS = {
-  topLeft: "Forgettable",
-  topRight: "✨ Masterpiece",
-  bottomLeft: "Meh...",
-  bottomRight: "Guilty Pleasure",
+  tl: "Respectable",
+  tr: "Masterpiece",
+  bl: "Terrible",
+  br: "Guilty Pleasure",
 };
 
 type SortOption = "dateNewest" | "dateOldest" | "alphaAZ" | "alphaZA" | "rating";
+
+interface MediaEntry {
+  _id: Id<"mediaEntries">;
+  title: string;
+  type: MediaType;
+  headRating: number;
+  heartRating: number;
+  dateWatched: number;
+  notes?: string;
+}
 
 export default function App() {
   return (
     <>
       <Header />
-      <main className="p-4 md:p-8 max-w-6xl mx-auto">
+      <main className="p-3 md:p-6 max-w-5xl mx-auto">
         <Authenticated>
           <Content />
         </Authenticated>
@@ -52,19 +158,47 @@ export default function App() {
 function Header() {
   const { isAuthenticated } = useConvexAuth();
   const { signOut } = useAuthActions();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <header className="header">
-      <div className="logo float">
-        💭 HeadandHeart 💖
+      <div className="logo">
+        <span className="logo-icon">{Icons.heart}</span>
+        <span>HeadandHeart</span>
       </div>
+
       {isAuthenticated && (
-        <button
-          className="btn btn-ghost"
-          onClick={() => void signOut()}
-        >
-          Sign out ✨
-        </button>
+        <div className="dropdown">
+          <button className="menu-btn" onClick={() => setMenuOpen(!menuOpen)}>
+            {menuOpen ? Icons.close : Icons.menu}
+          </button>
+
+          {menuOpen && (
+            <div className="dropdown-menu">
+              <a
+                href="https://indigo.spot"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="dropdown-item"
+                onClick={() => setMenuOpen(false)}
+              >
+                {Icons.home}
+                <span>My Website</span>
+              </a>
+              <div className="dropdown-divider" />
+              <button
+                className="dropdown-item"
+                onClick={() => {
+                  void signOut();
+                  setMenuOpen(false);
+                }}
+              >
+                {Icons.signOut}
+                <span>Sign Out</span>
+              </button>
+            </div>
+          )}
+        </div>
       )}
     </header>
   );
@@ -72,14 +206,14 @@ function Header() {
 
 function WelcomeSection() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-8">
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
       <div className="text-center">
-        <h1 className="text-5xl mb-4 float">💭💖</h1>
-        <h2 className="text-4xl font-bold mb-2">HeadandHeart</h2>
-        <p className="text-xl opacity-80 mb-8">
-          Rate your favorite media on two axes:<br />
-          <span className="text-[var(--color-secondary)]">🧠 Head</span> (intellectual) &
-          <span className="text-[var(--color-primary)]"> 💖 Heart</span> (emotional)
+        <div className="float" style={{ width: 64, height: 64, margin: '0 auto 1rem' }}>
+          {Icons.heart}
+        </div>
+        <h2 className="text-3xl font-bold mb-2">HeadandHeart</h2>
+        <p className="text-lg opacity-70 mb-6">
+          Rate media on two axes: Head & Heart
         </p>
       </div>
       <SignInForm />
@@ -94,12 +228,12 @@ function SignInForm() {
   const [loading, setLoading] = useState(false);
 
   return (
-    <div className="card pixel-border w-full max-w-md">
-      <h3 className="text-2xl mb-4 text-center">
-        {flow === "signIn" ? "Welcome back! ✨" : "Join us! 🌟"}
+    <div className="card w-full max-w-sm">
+      <h3 className="text-xl mb-3 text-center">
+        {flow === "signIn" ? "Welcome back" : "Create account"}
       </h3>
       <form
-        className="flex flex-col gap-4"
+        className="flex flex-col gap-3"
         onSubmit={(e) => {
           e.preventDefault();
           setLoading(true);
@@ -107,51 +241,29 @@ function SignInForm() {
           const formData = new FormData(e.target as HTMLFormElement);
           formData.set("flow", flow);
           void signIn("password", formData)
-            .catch((error) => {
-              setError(error.message);
-            })
+            .catch((error) => setError(error.message))
             .finally(() => setLoading(false));
         }}
       >
-        <input
-          className="input"
-          type="email"
-          name="email"
-          placeholder="✉️ Email"
-          required
-        />
-        <input
-          className="input"
-          type="password"
-          name="password"
-          placeholder="🔑 Password"
-          required
-        />
-        <button
-          className="btn btn-primary"
-          type="submit"
-          disabled={loading}
-        >
-          {loading ? "Loading..." : flow === "signIn" ? "Sign in 🚀" : "Sign up 🎉"}
+        <input className="input" type="email" name="email" placeholder="Email" required />
+        <input className="input" type="password" name="password" placeholder="Password" required />
+        <button className="btn btn-primary" type="submit" disabled={loading}>
+          {loading ? "..." : flow === "signIn" ? "Sign in" : "Sign up"}
         </button>
-        <div className="text-center">
-          <span className="opacity-70">
-            {flow === "signIn"
-              ? "Don't have an account? "
-              : "Already have an account? "}
+        <div className="text-center text-sm">
+          <span className="opacity-60">
+            {flow === "signIn" ? "No account? " : "Have account? "}
           </span>
           <button
             type="button"
-            className="underline hover:no-underline"
+            className="underline"
             onClick={() => setFlow(flow === "signIn" ? "signUp" : "signIn")}
           >
-            {flow === "signIn" ? "Sign up!" : "Sign in!"}
+            {flow === "signIn" ? "Sign up" : "Sign in"}
           </button>
         </div>
         {error && (
-          <div className="bg-red-100 border-2 border-red-300 rounded p-3 text-red-700">
-            ⚠️ {error}
-          </div>
+          <div className="text-sm text-red-600 bg-red-50 p-2 rounded">{error}</div>
         )}
       </form>
     </div>
@@ -160,6 +272,7 @@ function SignInForm() {
 
 function Content() {
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<MediaEntry | null>(null);
   const [typeFilter, setTypeFilter] = useState<MediaType | "all">("all");
   const [sortOption, setSortOption] = useState<SortOption>("dateNewest");
   const [headWeight, setHeadWeight] = useState(50);
@@ -170,77 +283,100 @@ function Content() {
 
   const sortedEntries = useMemo(() => {
     if (!entries) return [];
-
     const sorted = [...entries];
 
     switch (sortOption) {
-      case "dateNewest":
-        sorted.sort((a, b) => b.dateWatched - a.dateWatched);
-        break;
-      case "dateOldest":
-        sorted.sort((a, b) => a.dateWatched - b.dateWatched);
-        break;
-      case "alphaAZ":
-        sorted.sort((a, b) => a.title.localeCompare(b.title));
-        break;
-      case "alphaZA":
-        sorted.sort((a, b) => b.title.localeCompare(a.title));
-        break;
+      case "dateNewest": sorted.sort((a, b) => b.dateWatched - a.dateWatched); break;
+      case "dateOldest": sorted.sort((a, b) => a.dateWatched - b.dateWatched); break;
+      case "alphaAZ": sorted.sort((a, b) => a.title.localeCompare(b.title)); break;
+      case "alphaZA": sorted.sort((a, b) => b.title.localeCompare(a.title)); break;
       case "rating":
         sorted.sort((a, b) => {
-          const headW = headWeight / 100;
-          const heartW = 1 - headW;
-          const scoreA = a.headRating * headW + a.heartRating * heartW;
-          const scoreB = b.headRating * headW + b.heartRating * heartW;
-          return scoreB - scoreA;
+          const hW = headWeight / 100;
+          const hrW = 1 - hW;
+          return (b.headRating * hW + b.heartRating * hrW) - (a.headRating * hW + a.heartRating * hrW);
         });
         break;
     }
-
     return sorted;
   }, [entries, sortOption, headWeight]);
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Add Entry Button */}
+    <div className="flex flex-col gap-4">
       <div className="flex justify-center">
-        <button
-          className="btn btn-primary text-xl px-8"
-          onClick={() => setShowAddForm(true)}
-        >
-          ➕ Add New Entry
+        <button className="btn btn-primary" onClick={() => setShowAddForm(true)}>
+          {Icons.plus}
+          <span>Add Entry</span>
         </button>
       </div>
 
-      {/* Add Entry Modal */}
-      {showAddForm && (
-        <AddEntryModal onClose={() => setShowAddForm(false)} />
-      )}
+      {showAddForm && <EntryModal onClose={() => setShowAddForm(false)} />}
+      {editingEntry && <EntryModal entry={editingEntry} onClose={() => setEditingEntry(null)} />}
 
-      {/* Filter Bar */}
-      <FilterBar typeFilter={typeFilter} setTypeFilter={setTypeFilter} />
+      <div className="filter-bar">
+        <button
+          className={`filter-pill ${typeFilter === "all" ? "active" : ""}`}
+          onClick={() => setTypeFilter("all")}
+        >
+          All
+        </button>
+        {MEDIA_TYPES.map((t) => (
+          <button
+            key={t.value}
+            className={`filter-pill ${typeFilter === t.value ? "active" : ""}`}
+            onClick={() => setTypeFilter(t.value)}
+          >
+            {t.icon}
+          </button>
+        ))}
+      </div>
 
-      {/* Sort Controls */}
-      <SortControls
-        sortOption={sortOption}
-        setSortOption={setSortOption}
-        headWeight={headWeight}
-        setHeadWeight={setHeadWeight}
-      />
+      <div className="sort-bar">
+        <select
+          className="select"
+          value={sortOption}
+          onChange={(e) => setSortOption(e.target.value as SortOption)}
+        >
+          <option value="dateNewest">Newest</option>
+          <option value="dateOldest">Oldest</option>
+          <option value="alphaAZ">A-Z</option>
+          <option value="alphaZA">Z-A</option>
+          <option value="rating">Rating</option>
+        </select>
 
-      {/* Entries List */}
+        {sortOption === "rating" && (
+          <div className="weight-slider">
+            <span style={{ color: 'var(--color-secondary)' }}>Head {headWeight}%</span>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={headWeight}
+              onChange={(e) => setHeadWeight(Number(e.target.value))}
+              className="slider"
+            />
+            <span style={{ color: 'var(--color-primary)' }}>{100 - headWeight}% Heart</span>
+          </div>
+        )}
+      </div>
+
       {entries === undefined ? (
-        <div className="text-center py-8 pulse">Loading your entries... ✨</div>
+        <div className="text-center py-8 opacity-60">Loading...</div>
       ) : sortedEntries.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-state-icon">📭</div>
-          <p className="text-xl">No entries yet!</p>
-          <p className="opacity-70">Add your first movie, book, or game 🎬📚🎮</p>
+          {Icons.empty}
+          <p>No entries yet</p>
+          <p className="text-sm opacity-60">Add your first one</p>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="entries-grid">
           {sortedEntries.map((entry) => (
-            <MediaEntryCard key={entry._id} entry={entry} />
+            <MediaEntryCard
+              key={entry._id}
+              entry={entry}
+              headWeight={sortOption === "rating" ? headWeight : 50}
+              onEdit={() => setEditingEntry(entry)}
+            />
           ))}
         </div>
       )}
@@ -248,111 +384,50 @@ function Content() {
   );
 }
 
-function FilterBar({
-  typeFilter,
-  setTypeFilter,
-}: {
-  typeFilter: MediaType | "all";
-  setTypeFilter: (filter: MediaType | "all") => void;
-}) {
-  return (
-    <div className="flex flex-wrap gap-2 justify-center">
-      <button
-        className={`btn btn-ghost ${typeFilter === "all" ? "active" : ""}`}
-        onClick={() => setTypeFilter("all")}
-      >
-        All 🌈
-      </button>
-      {MEDIA_TYPES.map((type) => (
-        <button
-          key={type.value}
-          className={`btn btn-ghost ${typeFilter === type.value ? "active" : ""}`}
-          onClick={() => setTypeFilter(type.value)}
-        >
-          {type.emoji} {type.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function SortControls({
-  sortOption,
-  setSortOption,
-  headWeight,
-  setHeadWeight,
-}: {
-  sortOption: SortOption;
-  setSortOption: (option: SortOption) => void;
-  headWeight: number;
-  setHeadWeight: (weight: number) => void;
-}) {
-  return (
-    <div className="card pixel-border">
-      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="flex items-center gap-2">
-          <label className="opacity-70">Sort by:</label>
-          <select
-            className="select"
-            value={sortOption}
-            onChange={(e) => setSortOption(e.target.value as SortOption)}
-          >
-            <option value="dateNewest">📅 Newest First</option>
-            <option value="dateOldest">📅 Oldest First</option>
-            <option value="alphaAZ">🔤 A → Z</option>
-            <option value="alphaZA">🔤 Z → A</option>
-            <option value="rating">⭐ Rating</option>
-          </select>
-        </div>
-
-        {sortOption === "rating" && (
-          <div className="flex items-center gap-4 flex-1 max-w-md">
-            <span className="text-[var(--color-secondary)]">🧠 {headWeight}%</span>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={headWeight}
-              onChange={(e) => setHeadWeight(Number(e.target.value))}
-              className="slider flex-1"
-            />
-            <span className="text-[var(--color-primary)]">{100 - headWeight}% 💖</span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function AddEntryModal({ onClose }: { onClose: () => void }) {
+function EntryModal({ entry, onClose }: { entry?: MediaEntry; onClose: () => void }) {
   const addEntry = useMutation(api.mediaEntries.addMediaEntry);
-  const [title, setTitle] = useState("");
-  const [type, setType] = useState<MediaType>("movie");
-  const [headRating, setHeadRating] = useState(2);
-  const [heartRating, setHeartRating] = useState(2);
+  const updateEntry = useMutation(api.mediaEntries.updateMediaEntry);
+
+  const [title, setTitle] = useState(entry?.title ?? "");
+  const [type, setType] = useState<MediaType>(entry?.type ?? "movie");
+  const [headRating, setHeadRating] = useState(entry?.headRating ?? 2);
+  const [heartRating, setHeartRating] = useState(entry?.heartRating ?? 2);
   const [dateWatched, setDateWatched] = useState(
-    new Date().toISOString().split("T")[0]
+    entry ? new Date(entry.dateWatched).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]
   );
-  const [notes, setNotes] = useState("");
+  const [notes, setNotes] = useState(entry?.notes ?? "");
   const [loading, setLoading] = useState(false);
+
+  const isEditing = !!entry;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
-
     setLoading(true);
     try {
-      await addEntry({
-        title: title.trim(),
-        type,
-        headRating,
-        heartRating,
-        dateWatched: new Date(dateWatched).getTime(),
-        notes: notes.trim() || undefined,
-      });
+      if (isEditing) {
+        await updateEntry({
+          id: entry._id,
+          title: title.trim(),
+          type,
+          headRating,
+          heartRating,
+          dateWatched: new Date(dateWatched).getTime(),
+          notes: notes.trim() || undefined,
+        });
+      } else {
+        await addEntry({
+          title: title.trim(),
+          type,
+          headRating,
+          heartRating,
+          dateWatched: new Date(dateWatched).getTime(),
+          notes: notes.trim() || undefined,
+        });
+      }
       onClose();
     } catch (error) {
-      console.error("Failed to add entry:", error);
+      console.error("Failed to save:", error);
     } finally {
       setLoading(false);
     }
@@ -360,86 +435,49 @@ function AddEntryModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div
-        className="modal-content pixel-border"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-2xl mb-4 text-center">Add New Entry ✨</h2>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div>
-            <label className="block mb-1 opacity-70">Title</label>
-            <input
-              className="input w-full"
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="What did you experience?"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block mb-1 opacity-70">Type</label>
-            <select
-              className="select w-full"
-              value={type}
-              onChange={(e) => setType(e.target.value as MediaType)}
-            >
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-xl mb-4 text-center">{isEditing ? "Edit Entry" : "Add Entry"}</h2>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <input
+            className="input w-full"
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Title"
+            required
+          />
+          <div className="flex gap-2">
+            <select className="select flex-1" value={type} onChange={(e) => setType(e.target.value as MediaType)}>
               {MEDIA_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.emoji} {t.label}
-                </option>
+                <option key={t.value} value={t.value}>{t.label}</option>
               ))}
             </select>
-          </div>
-
-          <div>
-            <label className="block mb-1 opacity-70">Date</label>
             <input
-              className="input w-full"
+              className="input flex-1"
               type="date"
               value={dateWatched}
               onChange={(e) => setDateWatched(e.target.value)}
             />
           </div>
 
-          <div>
-            <label className="block mb-2 opacity-70">Rating</label>
-            <RatingGrid
-              headRating={headRating}
-              heartRating={heartRating}
-              onSelect={(head, heart) => {
-                setHeadRating(head);
-                setHeartRating(heart);
-              }}
-            />
-          </div>
+          <RatingGrid
+            headRating={headRating}
+            heartRating={heartRating}
+            onSelect={(head, heart) => { setHeadRating(head); setHeartRating(heart); }}
+          />
 
-          <div>
-            <label className="block mb-1 opacity-70">Notes (optional)</label>
-            <textarea
-              className="input w-full resize-none"
-              rows={2}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Any thoughts?"
-            />
-          </div>
+          <textarea
+            className="input w-full resize-none"
+            rows={2}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Notes (optional)"
+          />
 
           <div className="flex gap-2 justify-end">
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={onClose}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={loading || !title.trim()}
-            >
-              {loading ? "Adding..." : "Add Entry 🎉"}
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn btn-primary btn-sm" disabled={loading || !title.trim()}>
+              {loading ? "..." : isEditing ? "Save" : "Add"}
             </button>
           </div>
         </form>
@@ -457,126 +495,91 @@ function RatingGrid({
   heartRating: number;
   onSelect: (head: number, heart: number) => void;
 }) {
-  // Grid is 3x3, x-axis is head (1-3 left to right), y-axis is heart (1-3 bottom to top)
   const cells = [];
-
-  for (let row = 0; row < 3; row++) {
-    for (let col = 0; col < 3; col++) {
-      const head = col + 1; // 1, 2, 3 from left to right
-      const heart = 3 - row; // 3, 2, 1 from top to bottom
+  for (let row = 0; row < 4; row++) {
+    for (let col = 0; col < 4; col++) {
+      const heart = col + 1;
+      const head = 4 - row;
       const isSelected = head === headRating && heart === heartRating;
-
       cells.push(
         <div
           key={`${head}-${heart}`}
           className={`rating-cell ${isSelected ? "selected" : ""}`}
           onClick={() => onSelect(head, heart)}
-          title={`Head: ${head}, Heart: ${heart}`}
         />
       );
     }
   }
 
   return (
-    <div className="flex flex-col items-center">
-      <div className="relative">
-        {/* Axis labels */}
-        <div className="absolute -top-8 left-1/2 -translate-x-1/2 text-sm opacity-70">
-          💖 Heart
-        </div>
-        <div className="absolute top-1/2 -left-16 -translate-y-1/2 -rotate-90 text-sm opacity-70">
-          🧠 Head
-        </div>
-
-        {/* Corner labels */}
-        <div className="rating-label top-left text-xs">{RATING_LABELS.topLeft}</div>
-        <div className="rating-label top-right text-xs">{RATING_LABELS.topRight}</div>
-        <div className="rating-label bottom-left text-xs">{RATING_LABELS.bottomLeft}</div>
-        <div className="rating-label bottom-right text-xs">{RATING_LABELS.bottomRight}</div>
-
-        <div className="rating-grid">
-          {cells}
-        </div>
+    <div className="rating-grid-wrapper">
+      <div className="rating-grid-container">
+        <div className="rating-axis left">Head</div>
+        <div className="rating-axis bottom">Heart</div>
+        <div className="rating-corner tl">{RATING_LABELS.tl}</div>
+        <div className="rating-corner tr">{RATING_LABELS.tr}</div>
+        <div className="rating-corner bl">{RATING_LABELS.bl}</div>
+        <div className="rating-corner br">{RATING_LABELS.br}</div>
+        <div className="rating-grid">{cells}</div>
       </div>
-      <div className="mt-6 text-center text-sm opacity-70">
-        Selected: 🧠 {headRating} / 💖 {heartRating}
-      </div>
+      <div className="rating-display">Head {headRating}/4 · Heart {heartRating}/4</div>
     </div>
   );
 }
 
 function MediaEntryCard({
   entry,
+  headWeight,
+  onEdit,
 }: {
-  entry: {
-    _id: Id<"mediaEntries">;
-    title: string;
-    type: MediaType;
-    headRating: number;
-    heartRating: number;
-    dateWatched: number;
-    notes?: string;
-  };
+  entry: MediaEntry;
+  headWeight: number;
+  onEdit: () => void;
 }) {
   const deleteEntry = useMutation(api.mediaEntries.deleteMediaEntry);
   const [showConfirm, setShowConfirm] = useState(false);
 
   const typeInfo = MEDIA_TYPES.find((t) => t.value === entry.type);
-  const formattedDate = new Date(entry.dateWatched).toLocaleDateString();
+  const formattedDate = new Date(entry.dateWatched).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
 
-  const handleDelete = async () => {
-    await deleteEntry({ id: entry._id });
-    setShowConfirm(false);
-  };
+  // Calculate weighted bar widths
+  const headW = headWeight / 100;
+  const heartW = 1 - headW;
+  const totalScore = entry.headRating * headW + entry.heartRating * heartW;
+  const maxScore = 4;
+  const headPortion = (entry.headRating / maxScore) * headW * 100;
+  const heartPortion = (entry.heartRating / maxScore) * heartW * 100;
 
   return (
-    <div className="card pixel-border relative group">
-      {/* Delete button */}
-      <button
-        className="absolute top-2 right-2 opacity-0 group-hover:opacity-70 hover:opacity-100 transition-opacity text-lg"
-        onClick={() => setShowConfirm(true)}
-        title="Delete entry"
-      >
-        🗑️
-      </button>
+    <div className="card entry-card relative">
+      <div className="entry-title">{entry.title}</div>
 
-      {/* Type badge */}
-      <span className={`type-badge type-${entry.type}`}>
-        {typeInfo?.emoji} {typeInfo?.label}
-      </span>
-
-      {/* Title */}
-      <h3 className="text-xl mt-2 mb-1 font-bold">{entry.title}</h3>
-
-      {/* Date */}
-      <p className="text-sm opacity-70 mb-3">📅 {formattedDate}</p>
-
-      {/* Ratings */}
-      <div className="rating-display mb-2">
-        <span className="rating-icon rating-head">
-          🧠 {"★".repeat(entry.headRating)}{"☆".repeat(3 - entry.headRating)}
-        </span>
-        <span className="rating-icon rating-heart">
-          💖 {"★".repeat(entry.heartRating)}{"☆".repeat(3 - entry.heartRating)}
-        </span>
+      <div className="entry-actions">
+        <button onClick={onEdit} title="Edit">{Icons.edit}</button>
+        <button onClick={() => setShowConfirm(true)} title="Delete">{Icons.trash}</button>
       </div>
 
-      {/* Notes */}
-      {entry.notes && (
-        <p className="text-sm opacity-80 mt-2 italic">"{entry.notes}"</p>
-      )}
+      <div className="entry-meta">
+        <span className={`type-badge type-${entry.type}`}>{typeInfo?.icon}</span>
+        <span>{formattedDate}</span>
+        <div className="rating-bar">
+          <div className="rating-bar-head" style={{ width: `${headPortion}%` }} />
+          <div className="rating-bar-heart" style={{ width: `${heartPortion}%` }} />
+        </div>
+        <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>{totalScore.toFixed(1)}</span>
+      </div>
 
-      {/* Delete confirmation */}
+      {entry.notes && <p className="entry-notes">"{entry.notes}"</p>}
+
       {showConfirm && (
-        <div className="absolute inset-0 bg-white/90 dark:bg-black/90 flex flex-col items-center justify-center rounded gap-2">
-          <p>Delete this entry?</p>
+        <div className="confirm-overlay">
+          <p className="text-sm">Delete?</p>
           <div className="flex gap-2">
-            <button className="btn btn-ghost" onClick={() => setShowConfirm(false)}>
-              Cancel
-            </button>
-            <button className="btn btn-primary" onClick={handleDelete}>
-              Delete
-            </button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowConfirm(false)}>No</button>
+            <button className="btn btn-danger btn-sm" onClick={() => deleteEntry({ id: entry._id })}>Yes</button>
           </div>
         </div>
       )}

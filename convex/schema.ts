@@ -19,8 +19,8 @@ export default defineSchema({
       v.literal("videogame"),
       v.literal("boardgame")
     ),
-    headRating: v.number(), // 1-3 intellectual satisfaction
-    heartRating: v.number(), // 1-3 emotional satisfaction
+    headRating: v.number(), // 1-4 intellectual satisfaction
+    heartRating: v.number(), // 1-4 emotional satisfaction
     dateWatched: v.number(), // timestamp
     notes: v.optional(v.string()),
   }).index("by_user", ["userId"]),

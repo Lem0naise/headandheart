@@ -27,12 +27,12 @@ export const addMediaEntry = mutation({
             throw new Error("Not authenticated");
         }
 
-        // Validate ratings are 1-3
-        if (args.headRating < 1 || args.headRating > 3) {
-            throw new Error("Head rating must be between 1 and 3");
+        // Validate ratings are 1-4
+        if (args.headRating < 1 || args.headRating > 4) {
+            throw new Error("Head rating must be between 1 and 4");
         }
-        if (args.heartRating < 1 || args.heartRating > 3) {
-            throw new Error("Heart rating must be between 1 and 3");
+        if (args.heartRating < 1 || args.heartRating > 4) {
+            throw new Error("Heart rating must be between 1 and 4");
         }
 
         const id = await ctx.db.insert("mediaEntries", {
@@ -100,11 +100,11 @@ export const updateMediaEntry = mutation({
         }
 
         // Validate ratings if provided
-        if (args.headRating !== undefined && (args.headRating < 1 || args.headRating > 3)) {
-            throw new Error("Head rating must be between 1 and 3");
+        if (args.headRating !== undefined && (args.headRating < 1 || args.headRating > 4)) {
+            throw new Error("Head rating must be between 1 and 4");
         }
-        if (args.heartRating !== undefined && (args.heartRating < 1 || args.heartRating > 3)) {
-            throw new Error("Heart rating must be between 1 and 3");
+        if (args.heartRating !== undefined && (args.heartRating < 1 || args.heartRating > 4)) {
+            throw new Error("Heart rating must be between 1 and 4");
         }
 
         const updates: Partial<typeof entry> = {};
