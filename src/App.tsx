@@ -128,6 +128,12 @@ const Icons = {
       <line x1="19" y1="5" x2="19" y2="19" />
     </svg>
   ),
+  search: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  ),
 };
 
 // Media types
@@ -229,14 +235,15 @@ interface MediaEntry {
 
 export default function App() {
   const [view, setView] = useState<"home" | "stats">("home");
+  const [searchQuery, setSearchQuery] = useState("");
 
   return (
     <>
-      <Header currentView={view} onViewChange={setView} />
+      <Header currentView={view} onViewChange={setView} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
       <main className="p-3 md:p-6 max-w-5xl mx-auto">
         <Authenticated>
           {view === "home" ? (
-            <Content />
+            <Content searchQuery={searchQuery} />
           ) : (
             <StatsLoader onBack={() => setView("home")} />
           )}
@@ -257,29 +264,71 @@ function StatsLoader({ onBack }: { onBack: () => void }) {
   return <StatsView entries={entries as MediaEntry[]} onBack={onBack} />;
 }
 
-function Header({ currentView, onViewChange }: { currentView?: "home" | "stats"; onViewChange?: (v: "home" | "stats") => void }) {
+function Header({
+  currentView,
+  onViewChange,
+  searchQuery,
+  onSearchChange
+}: {
+  currentView?: "home" | "stats";
+  onViewChange?: (v: "home" | "stats") => void;
+  searchQuery: string;
+  onSearchChange: (q: string) => void;
+}) {
   const { isAuthenticated } = useConvexAuth();
   const { signOut } = useAuthActions();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   return (
-    <header className="header">
-      <div className="logo cursor-pointer" onClick={() => onViewChange?.("home")}>
-        <span className="logo-icon">{Icons.heart}</span>
-        <span>HeadandHeart</span>
+    <header className="header relative">
+      <div className="flex items-center gap-4 flex-1">
+        <div className="logo cursor-pointer shrink-0" onClick={() => onViewChange?.("home")}>
+          <span className="logo-icon">{Icons.heart}</span>
+          <span className="inline">HeadandHeart</span>
+
+        </div>
+
+        {/* Desktop Search */}
+        {isAuthenticated && currentView === "home" && (
+          <div className="hidden md:block flex-1 max-w-sm">
+            <div className="relative">
+              <input
+                type="text"
+                className="input py-1 px-3 w-full pl-9 h-9 text-sm"
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => onSearchChange(e.target.value)}
+              />
+            </div>
+          </div>
+        )}
       </div>
+
 
       {isAuthenticated && (
         <div className="flex items-center gap-2">
           {currentView === "home" && (
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={() => onViewChange?.("stats")}
-              title="Taste Stats"
-            >
-              {Icons.chart}
-              <span className="hidden md:inline">Stats</span>
-            </button>
+            <>
+              {/* Mobile Search Toggle */}
+              <button
+                className="btn btn-secondary btn-sm md:!hidden px-2"
+                onClick={() => {
+                  setMobileSearchOpen(!mobileSearchOpen);
+                }}
+              >
+                {Icons.search}
+              </button>
+
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => onViewChange?.("stats")}
+                title="Taste Stats"
+              >
+                {Icons.chart}
+                <span className="hidden md:inline">Stats</span>
+              </button>
+            </>
           )}
 
           <div className="dropdown">
@@ -332,6 +381,22 @@ function Header({ currentView, onViewChange }: { currentView?: "home" | "stats";
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Search Bar (Overlay/Expansion) */}
+      {mobileSearchOpen && currentView === "home" && (
+        <div className="absolute top-full left-0 right-0 p-2 bg-[var(--color-card)] border-b border-black/5 shadow-md md:hidden z-10 animate-in slide-in-from-top-2">
+          <div className="relative">
+            <input
+              autoFocus
+              type="text"
+              className="input w-full pl-9"
+              placeholder="Search..."
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+            />
           </div>
         </div>
       )}
@@ -405,7 +470,7 @@ function SignInForm() {
   );
 }
 
-function Content() {
+function Content({ searchQuery }: { searchQuery?: string }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [editingEntry, setEditingEntry] = useState<MediaEntry | null>(null);
@@ -419,23 +484,36 @@ function Content() {
 
   const sortedEntries = useMemo(() => {
     if (!entries) return [];
-    const sorted = [...entries];
+    let processed = [...entries];
+
+    // Search Filter
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      processed = processed.filter(e => {
+        const typeInfo = MEDIA_TYPES.find(t => t.value === e.type);
+        return (
+          e.title.toLowerCase().includes(q) ||
+          e.notes?.toLowerCase().includes(q) ||
+          typeInfo?.label.toLowerCase().includes(q)
+        );
+      });
+    }
 
     switch (sortOption) {
-      case "dateNewest": sorted.sort((a, b) => b.dateWatched - a.dateWatched); break;
-      case "dateOldest": sorted.sort((a, b) => a.dateWatched - b.dateWatched); break;
-      case "alphaAZ": sorted.sort((a, b) => a.title.localeCompare(b.title)); break;
-      case "alphaZA": sorted.sort((a, b) => b.title.localeCompare(a.title)); break;
+      case "dateNewest": processed.sort((a, b) => b.dateWatched - a.dateWatched); break;
+      case "dateOldest": processed.sort((a, b) => a.dateWatched - b.dateWatched); break;
+      case "alphaAZ": processed.sort((a, b) => a.title.localeCompare(b.title)); break;
+      case "alphaZA": processed.sort((a, b) => b.title.localeCompare(a.title)); break;
       case "rating":
-        sorted.sort((a, b) => {
+        processed.sort((a, b) => {
           const hW = headWeight / 100;
           const hrW = 1 - hW;
           return (b.headRating * hW + b.heartRating * hrW) - (a.headRating * hW + a.heartRating * hrW);
         });
         break;
     }
-    return sorted;
-  }, [entries, sortOption, headWeight]);
+    return processed;
+  }, [entries, sortOption, headWeight, searchQuery]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -505,9 +583,19 @@ function Content() {
         <div className="text-center py-8 opacity-60">Loading...</div>
       ) : sortedEntries.length === 0 ? (
         <div className="empty-state">
-          {Icons.empty}
-          <p>No entries yet</p>
-          <p className="text-sm opacity-60">Add your first one</p>
+          {searchQuery ? (
+            <>
+              {Icons.search}
+              <p>No matches found</p>
+              <p className="text-sm opacity-60">Try a different search term</p>
+            </>
+          ) : (
+            <>
+              {Icons.empty}
+              <p>No entries yet</p>
+              <p className="text-sm opacity-60">Add your first one</p>
+            </>
+          )}
         </div>
       ) : (
         <div className="entries-grid">
@@ -803,7 +891,7 @@ function MediaEntryCard({
           </div>
         </div>
 
-        {entry.notes && <p className="entry-notes mt-0">"{entry.notes}"</p>}
+        {entry.notes && <p className="entry-notes mt-0 mb-0">"{entry.notes}"</p>}
       </div>
 
       {showConfirm && (

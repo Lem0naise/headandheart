@@ -85,12 +85,12 @@ export default function StatsView({ entries, onBack }: StatsProps) {
             {/* 5. Taste Evolution */}
             <Section title="5. Taste Evolution">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="card">
+                    <div className="card p-2">
                         <h4 className="font-bold mb-2">The "Snobbery" Index</h4>
                         <p className="text-sm opacity-70 mb-4">Average Head rating over time</p>
                         <TrendLine entries={entries} field="headRating" color="var(--color-secondary)" />
                     </div>
-                    <div className="card">
+                    <div className="card p-2">
                         <h4 className="font-bold mb-2">The "Softening" Index</h4>
                         <p className="text-sm opacity-70 mb-4">Percentage of "Heart: 5" ratings over time</p>
                         <TrendLine entries={entries} field="heartRating" color="var(--color-primary)" isPercentage5={true} />
@@ -140,7 +140,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function StatCard({ title, subtitle, entries, moreCount = 0 }: { title: string; subtitle: string; entries: MediaEntry[]; moreCount?: number }) {
     return (
-        <div className="card h-full">
+        <div className="card h-full p-2">
             <h4 className="font-bold text-lg leading-tight">{title}</h4>
             <p className="text-xs opacity-60 mb-3">{subtitle}</p>
             {entries.length === 0 ? (

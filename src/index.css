@@ -153,7 +153,6 @@ body {
 .card {
   background: var(--color-card);
   border-radius: 8px;
-  padding: 1.25rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   transition: transform 0.2s, box-shadow 0.2s;
 }
@@ -179,7 +178,6 @@ body {
   }
 
   .entry-card {
-    padding: 1rem;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -282,6 +280,7 @@ body {
   background: rgba(0, 0, 0, 0.03);
   line-height: 0.9rem;
   border-radius: 4px;
+  margin: 0;
 }
 
 /* Redesigned Elements */
@@ -694,6 +693,17 @@ body {
 @media (max-width: 640px) {
   .modal-overlay {
     padding: 0.5rem;
+  }
+
+  .logo {
+    gap: 0.2rem;
+    margin-left: -0.1rem;
+    font-size: 1.2rem;
+  }
+
+  .logo-icon {
+    width: 20px;
+    height: 20px;
   }
 
   .modal-content {
