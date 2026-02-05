@@ -22,13 +22,28 @@
 html {
   font-family: 'VT323', monospace;
   font-size: 18px;
+  height: 100%;
 }
 
 body {
+  margin: 0;
+  height: 100%;
+  min-height: 100dvh;
   min-height: 100vh;
   transition: background-color 0.3s, color 0.3s;
   color: var(--color-dark);
   background: linear-gradient(135deg, #fef7f0 0%, #f5e6f0 50%, #e6f0f5 100%);
+}
+
+#root {
+  min-height: 100dvh;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+#root main {
+  flex: 1;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -187,7 +202,7 @@ body {
   .entry-title {
     font-size: 2rem;
     margin-bottom: 0.5rem;
-    line-height: 1.1;
+    line-height: 0.9;
   }
 
   .entry-meta {
@@ -226,8 +241,9 @@ body {
 
 .entry-title {
   font-size: 1.5rem;
+  margin: 0;
   font-weight: bold;
-  line-height: 1.2;
+  line-height: 0.9;
 }
 
 .entry-meta {
@@ -274,6 +290,7 @@ body {
   opacity: 0.75;
   font-style: italic;
   display: -webkit-box;
+  line-clamp: 2;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;

@@ -867,7 +867,7 @@ function MediaEntryCard({
       </div>
 
       {/* Content Body */}
-      <div className="p-4 flex flex-col gap-3 flex-1">
+      <div className="p-4 flex flex-col gap-1 flex-1">
         <div className="flex justify-between items-start gap-2">
           <div className="entry-title mb-0">{entry.title}</div>
           <div className="entry-actions shrink-0">
