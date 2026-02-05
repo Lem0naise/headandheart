@@ -10,8 +10,8 @@
   --color-secondary: #a4c9f8;
   --color-accent: #c9e8a4;
   --color-lavender: #c4b5e0;
-  --color-peach: #f5c6a4;
-  --color-mint: #a4e8c9;
+  --color-peach: #e5b694;
+  --color-mint: #94d8b9;
   --color-card: #fff8f3;
   --color-card-dark: #3d3a42;
   --color-negative: #e57373;
@@ -305,35 +305,41 @@ body {
 /* Type Pill: Combined Icon + Label */
 /* Banner / Header */
 .entry-banner {
+  --type-accent: var(--color-primary);
+  position: relative;
   width: 100%;
-  padding: 0.5rem 1rem;
+  padding: 0.75rem 1rem;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  color: var(--color-dark);
-  /* Default text color */
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.03), rgba(0, 0, 0, 0.01));
+  overflow: hidden;
 }
 
-/* Banner specific colors */
-.type-movie.entry-banner {
-  background: var(--color-primary);
+.entry-banner .entry-banner-fill {
+  position: absolute;
+  inset: 0;
+  width: 0;
+  transition: width 0.25s ease, background 0.25s ease;
+  opacity: 0.75;
 }
 
-.type-book.entry-banner {
-  background: var(--color-lavender);
+.entry-banner .entry-banner-content {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+
+  color: var(--color-card);
 }
 
-.type-tvshow.entry-banner {
-  background: var(--color-secondary);
-}
-
-.type-videogame.entry-banner {
-  background: var(--color-accent);
-}
-
-.type-boardgame.entry-banner {
-  background: var(--color-peach);
-}
+.type-movie.entry-banner { --type-accent: var(--color-primary); }
+.type-book.entry-banner { --type-accent: var(--color-lavender); }
+.type-tvshow.entry-banner { --type-accent: var(--color-secondary); }
+.type-videogame.entry-banner { --type-accent: var(--color-accent); }
+.type-boardgame.entry-banner { --type-accent: var(--color-peach); }
 
 /* Rating Layout */
 .rating-details {
@@ -346,7 +352,6 @@ body {
   font-size: 1.8rem;
   font-weight: bold;
   line-height: 1;
-  color: var(--color-dark);
   text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.05);
 }
 
@@ -406,6 +411,11 @@ body {
   height: 18px;
 }
 
+.btn-lg {
+  font-size: 1.2rem;
+  padding: 0.65rem 1.25rem;
+}
+
 .btn-primary {
   background: var(--color-primary);
   color: var(--color-dark);
@@ -438,6 +448,11 @@ body {
   opacity: 1;
   background: var(--color-primary);
   border-color: transparent;
+}
+
+.import-btn {
+  border-style: dashed;
+  opacity: 0.8;
 }
 
 .btn-danger {
@@ -593,6 +608,97 @@ body {
   margin-top: 0.75rem;
   font-size: 0.9rem;
   opacity: 0.8;
+}
+
+/* Controls layout */
+.control-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  .control-bar {
+    background: rgba(45, 42, 50, 0.85);
+  }
+}
+
+.control-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.control-row-top {
+  justify-content: space-between;
+  align-items: stretch;
+}
+
+.search-group {
+  flex: 1;
+  min-width: 240px;
+}
+
+.input-with-icon {
+  position: relative;
+}
+
+.input-with-icon .input {
+  padding-left: 2.5rem;
+  width: 100%;
+}
+
+.input-icon {
+  position: absolute;
+  top: 50%;
+  left: 0.75rem;
+  transform: translateY(-50%);
+  opacity: 0.5;
+  display: flex;
+  align-items: center;
+}
+
+.actions-stack {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.filter-row {
+  width: 100%;
+}
+
+.filter-scroll {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+  scrollbar-width: thin;
+}
+
+.filter-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+
+.sort-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.sort-label {
+  font-size: 0.95rem;
+  opacity: 0.7;
 }
 
 /* Filter pills */

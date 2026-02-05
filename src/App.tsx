@@ -239,11 +239,16 @@ export default function App() {
 
   return (
     <>
-      <Header currentView={view} onViewChange={setView} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+      <Header
+        currentView={view}
+        onViewChange={setView}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+      />
       <main className="p-3 md:p-6 max-w-5xl mx-auto">
         <Authenticated>
           {view === "home" ? (
-            <Content searchQuery={searchQuery} />
+            <Content searchQuery={searchQuery} onSearchChange={setSearchQuery} />
           ) : (
             <StatsLoader onBack={() => setView("home")} />
           )}
@@ -268,7 +273,7 @@ function Header({
   currentView,
   onViewChange,
   searchQuery,
-  onSearchChange
+  onSearchChange,
 }: {
   currentView?: "home" | "stats";
   onViewChange?: (v: "home" | "stats") => void;
@@ -313,9 +318,8 @@ function Header({
               {/* Mobile Search Toggle */}
               <button
                 className="btn btn-secondary btn-sm md:!hidden px-2"
-                onClick={() => {
-                  setMobileSearchOpen(!mobileSearchOpen);
-                }}
+                onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
+                title="Search"
               >
                 {Icons.search}
               </button>
@@ -470,7 +474,7 @@ function SignInForm() {
   );
 }
 
-function Content({ searchQuery }: { searchQuery?: string }) {
+function Content({ searchQuery, onSearchChange }: { searchQuery?: string; onSearchChange: (q: string) => void }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [editingEntry, setEditingEntry] = useState<MediaEntry | null>(null);
@@ -517,67 +521,76 @@ function Content({ searchQuery }: { searchQuery?: string }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex justify-center gap-2">
-        <button className="btn btn-primary" onClick={() => setShowAddForm(true)}>
-          {Icons.plus}
-          <span>Add</span>
-        </button>
-        <button className="btn btn-secondary" onClick={() => setShowImport(true)}>
-          {Icons.upload}
-          <span>Import</span>
-        </button>
+      <div className="control-bar card">
+        <div className="control-row control-row-top">
+          
+          <div className="actions-stack">
+            <button className="btn btn-primary btn-lg" onClick={() => setShowAddForm(true)}>
+              {Icons.plus}
+              <span>Add</span>
+            </button>
+            <button className="btn btn-ghost btn-sm import-btn" onClick={() => setShowImport(true)}>
+              {Icons.upload}
+              <span>Import</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="control-row filter-row">
+          <div className="filter-scroll">
+            <button
+              className={`filter-pill ${typeFilter === "all" ? "active" : ""}`}
+              onClick={() => setTypeFilter("all")}
+            >
+              All
+            </button>
+            {MEDIA_TYPES.map((t) => (
+              <button
+                key={t.value}
+                className={`filter-pill ${typeFilter === t.value ? "active" : ""}`}
+                onClick={() => setTypeFilter(t.value)}
+              >
+                {t.icon}
+                <span className="hidden sm:inline">{t.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="control-row sort-row">
+          <label className="sort-label">Sort</label>
+          <select
+            className="select"
+            value={sortOption}
+            onChange={(e) => setSortOption(e.target.value as SortOption)}
+          >
+            <option value="dateNewest">Newest</option>
+            <option value="dateOldest">Oldest</option>
+            <option value="alphaAZ">A-Z</option>
+            <option value="alphaZA">Z-A</option>
+            <option value="rating">Rating</option>
+          </select>
+
+          {sortOption === "rating" && (
+            <div className="weight-slider">
+              <span style={{ color: 'var(--color-secondary)' }}>Head {headWeight}%</span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={headWeight}
+                onChange={(e) => setHeadWeight(Number(e.target.value))}
+                className="slider"
+              />
+              <span style={{ color: 'var(--color-primary)' }}>{100 - headWeight}% Heart</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {showAddForm && <EntryModal onClose={() => setShowAddForm(false)} />}
       {showImport && <ImportModal existingEntries={entries || []} onClose={() => setShowImport(false)} />}
       {editingEntry && <EntryModal entry={editingEntry} onClose={() => setEditingEntry(null)} />}
-
-      <div className="filter-bar">
-        <button
-          className={`filter-pill ${typeFilter === "all" ? "active" : ""}`}
-          onClick={() => setTypeFilter("all")}
-        >
-          All
-        </button>
-        {MEDIA_TYPES.map((t) => (
-          <button
-            key={t.value}
-            className={`filter-pill ${typeFilter === t.value ? "active" : ""}`}
-            onClick={() => setTypeFilter(t.value)}
-          >
-            {t.icon}
-          </button>
-        ))}
-      </div>
-
-      <div className="sort-bar">
-        <select
-          className="select"
-          value={sortOption}
-          onChange={(e) => setSortOption(e.target.value as SortOption)}
-        >
-          <option value="dateNewest">Newest</option>
-          <option value="dateOldest">Oldest</option>
-          <option value="alphaAZ">A-Z</option>
-          <option value="alphaZA">Z-A</option>
-          <option value="rating">Rating</option>
-        </select>
-
-        {sortOption === "rating" && (
-          <div className="weight-slider">
-            <span style={{ color: 'var(--color-secondary)' }}>Head {headWeight}%</span>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={headWeight}
-              onChange={(e) => setHeadWeight(Number(e.target.value))}
-              className="slider"
-            />
-            <span style={{ color: 'var(--color-primary)' }}>{100 - headWeight}% Heart</span>
-          </div>
-        )}
-      </div>
 
       {entries === undefined ? (
         <div className="text-center py-8 opacity-60">Loading...</div>
@@ -825,6 +838,12 @@ function RatingGrid({
   );
 }
 
+function getRatingColor(score: number) {
+  const clamped = Math.max(0, Math.min(5, score));
+  const hue = (clamped / 5) * 120; // 0 = red, 120 = green
+  return `hsl(${hue}, 40%, 40%)`;
+}
+
 function MediaEntryCard({
   entry,
   headWeight,
@@ -848,21 +867,30 @@ function MediaEntryCard({
   const heartW = 1 - headW;
   const totalScore = entry.headRating * headW + entry.heartRating * heartW;
   const maxScore = 5;
-  const headPortion = (entry.headRating / maxScore) * headW * 100;
-  const heartPortion = (entry.heartRating / maxScore) * heartW * 100;
+  const scorePercent = Math.min(100, Math.max(0, (totalScore / maxScore) * 100));
+  const bannerColor = getRatingColor(totalScore);
 
   return (
     <div className="card entry-card relative group p-0 overflow-hidden flex flex-col">
       {/* Banner / Header */}
       <div className={`entry-banner type-${entry.type}`}>
-        <div className="flex items-center gap-2">
-          {typeInfo?.icon}
-          <span className="font-bold uppercase tracking-wider text-sm">{typeInfo?.label}</span>
+        <div className="entry-banner-fill" style={{ width: `${scorePercent}%`, background: bannerColor }} />
+        <div className="entry-banner-content">
+          <div className="flex items-center gap-2">
+            {typeInfo?.icon}
+            <span className="font-bold uppercase tracking-wider text-sm">{typeInfo?.label}</span>
+          </div>
+          <div className="flex items-center gap-3 text-xs opacity-80 whitespace-nowrap">
 
-        </div>
-        <span className="text-xs opacity-50 whitespace-nowrap">{formattedDate}</span>
-        <div className="rating-score-large text-white">
-          {totalScore.toFixed(1)}
+            <span className="opacity-75">Hd {entry.headRating}</span>
+            <span className="opacity-75">Ht {entry.heartRating}</span>
+            
+            <span>{formattedDate}</span>
+            
+            <span className="rating-score-large text-white drop-shadow" aria-label={`Total ${totalScore.toFixed(1)}`}>
+              {totalScore.toFixed(1)}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -874,21 +902,7 @@ function MediaEntryCard({
             <button onClick={onEdit} title="Edit">{Icons.edit}</button>
             <button onClick={() => setShowConfirm(true)} title="Delete">{Icons.trash}</button>
           </div>
-        </div>
-
-        <div className="flex items-center justify-between text-xs opacity-50">
-
-        </div>
-
-        <div className="rating-details mt-auto">
-          <div className="rating-bar">
-            <div className="rating-bar-head h-full" style={{ width: `${headPortion}%` }} />
-            <div className="rating-bar-heart h-full" style={{ width: `${heartPortion}%` }} />
-          </div>
-          <div className="rating-subtext mt-1">
-            <span>Hd {entry.headRating}</span>
-            <span>Ht {entry.heartRating}</span>
-          </div>
+          
         </div>
 
         {entry.notes && <p className="entry-notes mt-0 mb-0">"{entry.notes}"</p>}
