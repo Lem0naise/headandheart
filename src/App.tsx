@@ -13,6 +13,54 @@ import { useState, useMemo, useEffect, JSX } from "react";
 import { Id } from "../convex/_generated/dataModel";
 import StatsView from "./Stats";
 
+// Local Storage Cache Manager
+const CACHE_KEY = "headandheart_entries_cache";
+const CACHE_VERSION_KEY = "headandheart_cache_version";
+
+interface CacheData {
+  entries: MediaEntry[];
+  timestamp: number;
+  version: number;
+}
+
+function getCachedEntries(): MediaEntry[] | null {
+  try {
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (!cached) return null;
+    const data: CacheData = JSON.parse(cached);
+    // Cache is valid for 1 hour or until version changes
+    const now = Date.now();
+    if (now - data.timestamp > 60 * 60 * 1000) return null;
+    return data.entries;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedEntries(entries: MediaEntry[]) {
+  try {
+    const version = parseInt(localStorage.getItem(CACHE_VERSION_KEY) || "0");
+    const data: CacheData = {
+      entries,
+      timestamp: Date.now(),
+      version,
+    };
+    localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+  } catch {
+    // Ignore localStorage errors
+  }
+}
+
+function invalidateCache() {
+  try {
+    const version = parseInt(localStorage.getItem(CACHE_VERSION_KEY) || "0");
+    localStorage.setItem(CACHE_VERSION_KEY, (version + 1).toString());
+    localStorage.removeItem(CACHE_KEY);
+  } catch {
+    // Ignore localStorage errors
+  }
+}
+
 // SVG Icons
 const Icons = {
   logo: (
@@ -233,9 +281,58 @@ interface MediaEntry {
   notes?: string;
 }
 
+// Loading Skeleton Component
+function LoadingSkeleton() {
+  return (
+    <div className="flex flex-col gap-4 animate-pulse">
+      <div className="control-bar card">
+        <div className="control-row control-row-top">
+          <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded w-32"></div>
+          <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded w-32"></div>
+        </div>
+        <div className="control-row filter-row gap-2">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="h-10 bg-gray-200 dark:bg-gray-700 rounded w-20"></div>
+          ))}
+        </div>
+      </div>
+      <div className="entries-grid">
+        {[...Array(6)].map((_, i) => (
+          <div key={i} className="card entry-card p-0 overflow-hidden">
+            <div className="h-12 bg-gray-200 dark:bg-gray-700"></div>
+            <div className="p-4 flex flex-col gap-3">
+              <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
+              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
+              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-2/3"></div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StatsLoadingSkeleton() {
+  return (
+    <div className="flex flex-col gap-8 pb-12 animate-pulse">
+      <div className="flex items-center gap-4 mb-2">
+        <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded w-24"></div>
+        <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-48"></div>
+      </div>
+      {[...Array(3)].map((_, i) => (
+        <div key={i} className="card p-6">
+          <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-64 mb-4"></div>
+          <div className="h-64 bg-gray-200 dark:bg-gray-700 rounded"></div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function App() {
   const [view, setView] = useState<"home" | "stats">("home");
   const [searchQuery, setSearchQuery] = useState("");
+  const [cachedEntries, setCachedEntriesState] = useState<MediaEntry[] | null>(() => getCachedEntries());
 
   return (
     <>
@@ -248,9 +345,18 @@ export default function App() {
       <main className="p-3 md:p-6 max-w-5xl mx-auto">
         <Authenticated>
           {view === "home" ? (
-            <Content searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+            <Content 
+              searchQuery={searchQuery} 
+              onSearchChange={setSearchQuery}
+              cachedEntries={cachedEntries}
+              onEntriesUpdate={setCachedEntriesState}
+            />
           ) : (
-            <StatsLoader onBack={() => setView("home")} />
+            <StatsLoader 
+              onBack={() => setView("home")}
+              cachedEntries={cachedEntries}
+              onEntriesUpdate={setCachedEntriesState}
+            />
           )}
         </Authenticated>
         <Unauthenticated>
@@ -261,11 +367,35 @@ export default function App() {
   );
 }
 
-function StatsLoader({ onBack }: { onBack: () => void }) {
+function StatsLoader({ 
+  onBack, 
+  cachedEntries,
+  onEntriesUpdate 
+}: { 
+  onBack: () => void;
+  cachedEntries: MediaEntry[] | null;
+  onEntriesUpdate: (entries: MediaEntry[]) => void;
+}) {
   const entries = useQuery(api.mediaEntries.getMediaEntries, { typeFilter: undefined });
-  if (!entries) return <div className="text-center py-12 opacity-50">Loading stats...</div>;
+  
+  // Update cache when entries are loaded
+  useEffect(() => {
+    if (entries) {
+      const typedEntries = entries as MediaEntry[];
+      setCachedEntries(typedEntries);
+      onEntriesUpdate(typedEntries);
+    }
+  }, [entries, onEntriesUpdate]);
 
-  // Cast entries to ensure types match (Convex types can be loose, but our interface is strict)
+  // Show cached data immediately while loading
+  if (!entries && cachedEntries) {
+    return <StatsView entries={cachedEntries} onBack={onBack} />;
+  }
+
+  if (!entries) {
+    return <StatsLoadingSkeleton />;
+  }
+
   return <StatsView entries={entries as MediaEntry[]} onBack={onBack} />;
 }
 
@@ -474,7 +604,16 @@ function SignInForm() {
   );
 }
 
-function Content({ searchQuery}: { searchQuery?: string; onSearchChange: (q: string) => void }) {
+function Content({ 
+  searchQuery,
+  cachedEntries,
+  onEntriesUpdate
+}: { 
+  searchQuery?: string; 
+  onSearchChange: (q: string) => void;
+  cachedEntries: MediaEntry[] | null;
+  onEntriesUpdate: (entries: MediaEntry[]) => void;
+}) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [editingEntry, setEditingEntry] = useState<MediaEntry | null>(null);
@@ -486,9 +625,21 @@ function Content({ searchQuery}: { searchQuery?: string; onSearchChange: (q: str
     typeFilter: typeFilter === "all" ? undefined : typeFilter,
   });
 
+  // Update cache when entries change
+  useEffect(() => {
+    if (entries) {
+      const typedEntries = entries as MediaEntry[];
+      setCachedEntries(typedEntries);
+      onEntriesUpdate(typedEntries);
+    }
+  }, [entries, onEntriesUpdate]);
+
+  // Use cached entries immediately while loading
+  const displayEntries = entries || cachedEntries;
+
   const sortedEntries = useMemo(() => {
-    if (!entries) return [];
-    let processed = [...entries];
+    if (!displayEntries) return [];
+    let processed = [...displayEntries];
 
     // Search Filter
     if (searchQuery) {
@@ -517,7 +668,7 @@ function Content({ searchQuery}: { searchQuery?: string; onSearchChange: (q: str
         break;
     }
     return processed;
-  }, [entries, sortOption, headWeight, searchQuery]);
+  }, [displayEntries, sortOption, headWeight, searchQuery]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -592,8 +743,8 @@ function Content({ searchQuery}: { searchQuery?: string; onSearchChange: (q: str
       {showImport && <ImportModal existingEntries={entries || []} onClose={() => setShowImport(false)} />}
       {editingEntry && <EntryModal entry={editingEntry} onClose={() => setEditingEntry(null)} />}
 
-      {entries === undefined ? (
-        <div className="text-center py-8 opacity-60">Loading...</div>
+      {entries === undefined && !cachedEntries ? (
+        <LoadingSkeleton />
       ) : sortedEntries.length === 0 ? (
         <div className="empty-state">
           {searchQuery ? (
@@ -669,6 +820,7 @@ function EntryModal({ entry, onClose }: { entry?: MediaEntry; onClose: () => voi
           notes: notes.trim() || undefined,
         });
       }
+      invalidateCache(); // Invalidate cache after mutation
       onClose();
     } catch (error) {
       console.error("Failed to save:", error);
@@ -904,7 +1056,10 @@ function MediaEntryCard({
           <p className="text-sm">Delete?</p>
           <div className="flex gap-2">
             <button className="btn btn-ghost btn-sm" onClick={() => setShowConfirm(false)}>No</button>
-            <button className="btn btn-danger btn-sm" onClick={() => deleteEntry({ id: entry._id })}>Yes</button>
+            <button className="btn btn-danger btn-sm" onClick={() => {
+              deleteEntry({ id: entry._id });
+              invalidateCache();
+            }}>Yes</button>
           </div>
         </div>
       )}
@@ -1051,6 +1206,7 @@ function ImportModal({ existingEntries, onClose }: { existingEntries: MediaEntry
         dateWatched: dateWatched ? new Date(dateWatched).getTime() : Date.now(),
         notes: currentEntry.notes || undefined,
       });
+      invalidateCache(); // Invalidate cache after import
       setImportedCount(c => c + 1);
       moveToNext();
     } catch (error) {
