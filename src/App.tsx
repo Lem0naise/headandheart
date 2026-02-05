@@ -133,11 +133,28 @@ const MEDIA_TYPES: { value: MediaType; label: string; icon: JSX.Element }[] = [
   { value: "boardgame", label: "Board", icon: Icons.dice },
 ];
 
+const RATING_DESCRIPTIONS = {
+  head: {
+    1: "Broken: Unfinished/Incompetent.",
+    2: "Flawed: Had potential, but failed.",
+    3: "Solid: Professional and clear.",
+    4: "Exceptional: Stands out from the crowd.",
+    5: "Masterpiece: Flawless/Revolutionary.",
+  },
+  heart: {
+    1: "Painful: I wanted to quit.",
+    2: "Boring: I checked my phone.",
+    3: "Liked: Glad I watched it.",
+    4: "Captivated: I was fully locked in.",
+    5: "Soul-Stirring: Changed my life.",
+  }
+} as const;
+
 const RATING_LABELS = {
-  tl: "Respectable",
-  tr: "Masterpiece",
-  bl: "Terrible",
-  br: "Guilty Pleasure",
+  tl: "Cold Perfection", // High Head, Low Heart
+  tr: "Transcendental", // High Head, High Heart
+  bl: "Trash", // Low Head, Low Heart
+  br: "Guilty Pleasure", // Low Head, High Heart
 };
 
 type SortOption = "dateNewest" | "dateOldest" | "alphaAZ" | "alphaZA" | "rating";
@@ -409,8 +426,8 @@ function EntryModal({ entry, onClose }: { entry?: MediaEntry; onClose: () => voi
 
   const [title, setTitle] = useState(entry?.title ?? "");
   const [type, setType] = useState<MediaType>(entry?.type ?? "movie");
-  const [headRating, setHeadRating] = useState(entry?.headRating ?? 2);
-  const [heartRating, setHeartRating] = useState(entry?.heartRating ?? 2);
+  const [headRating, setHeadRating] = useState(entry?.headRating ?? 3);
+  const [heartRating, setHeartRating] = useState(entry?.heartRating ?? 3);
   const [dateWatched, setDateWatched] = useState(
     entry ? new Date(entry.dateWatched).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]
   );
@@ -515,16 +532,17 @@ function RatingGrid({
   onSelect: (head: number, heart: number) => void;
 }) {
   const cells = [];
-  for (let row = 0; row < 4; row++) {
-    for (let col = 0; col < 4; col++) {
+  for (let row = 0; row < 5; row++) {
+    for (let col = 0; col < 5; col++) {
       const heart = col + 1;
-      const head = 4 - row;
+      const head = 5 - row;
       const isSelected = head === headRating && heart === heartRating;
       cells.push(
         <div
           key={`${head}-${heart}`}
           className={`rating-cell ${isSelected ? "selected" : ""}`}
           onClick={() => onSelect(head, heart)}
+          title={`Head: ${head} - ${RATING_DESCRIPTIONS.head[head as keyof typeof RATING_DESCRIPTIONS.head]}\nHeart: ${heart} - ${RATING_DESCRIPTIONS.heart[heart as keyof typeof RATING_DESCRIPTIONS.heart]}`}
         />
       );
     }
@@ -541,8 +559,16 @@ function RatingGrid({
         <div className="rating-corner br">{RATING_LABELS.br}</div>
         <div className="rating-grid">{cells}</div>
       </div>
-      <div className="rating-display">Head {headRating}/4 · Heart {heartRating}/4</div>
-    </div>
+
+      <div className="rating-display flex flex-col gap-1 text-center text-sm">
+        <div className="font-bold">Head {headRating}/5 · Heart {heartRating}/5</div>
+        <div className="opacity-75 text-xs">
+          {RATING_DESCRIPTIONS.head[headRating as keyof typeof RATING_DESCRIPTIONS.head]}
+          <br />
+          {RATING_DESCRIPTIONS.heart[heartRating as keyof typeof RATING_DESCRIPTIONS.heart]}
+        </div>
+      </div>
+    </div >
   );
 }
 
@@ -568,7 +594,7 @@ function MediaEntryCard({
   const headW = headWeight / 100;
   const heartW = 1 - headW;
   const totalScore = entry.headRating * headW + entry.heartRating * heartW;
-  const maxScore = 4;
+  const maxScore = 5;
   const headPortion = (entry.headRating / maxScore) * headW * 100;
   const heartPortion = (entry.heartRating / maxScore) * heartW * 100;
 
@@ -685,8 +711,8 @@ function ImportModal({ onClose }: { onClose: () => void }) {
   const [importType, setImportType] = useState<'favourites.me'>('favourites.me');
   const [entries, setEntries] = useState<ImportedEntry[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [headRating, setHeadRating] = useState(2);
-  const [heartRating, setHeartRating] = useState(2);
+  const [headRating, setHeadRating] = useState(3);
+  const [heartRating, setHeartRating] = useState(3);
   const [loading, setLoading] = useState(false);
   const [importedCount, setImportedCount] = useState(0);
   const [skippedCount, setSkippedCount] = useState(0);
@@ -703,8 +729,8 @@ function ImportModal({ onClose }: { onClose: () => void }) {
       const parsed = parseCSV(text);
       setEntries(parsed);
       setCurrentIndex(0);
-      setHeadRating(2);
-      setHeartRating(2);
+      setHeadRating(3);
+      setHeartRating(3);
     };
     reader.readAsText(file);
   };
@@ -739,8 +765,8 @@ function ImportModal({ onClose }: { onClose: () => void }) {
   const moveToNext = () => {
     if (currentIndex < entries.length - 1) {
       setCurrentIndex(currentIndex + 1);
-      setHeadRating(2);
-      setHeartRating(2);
+      setHeadRating(3);
+      setHeartRating(3);
     } else {
       // Done
       setEntries([]);
