@@ -188,7 +188,7 @@ body {
   .entries-grid {
     display: grid;
     /* Reduced min-width from 320px to 240px for better density */
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
     gap: 1rem;
   }
 
@@ -217,6 +217,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+    width: 95vw;
   }
 
   /* We now use the main flex layout on mobile too, so no specific grid overrides needed aside from maybe spacing */
@@ -319,7 +320,6 @@ body {
 .entry-banner .entry-banner-fill {
   position: absolute;
   inset: 0;
-  width: 0;
   transition: width 0.25s ease, background 0.25s ease;
   opacity: 0.75;
 }

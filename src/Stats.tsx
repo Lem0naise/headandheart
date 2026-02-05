@@ -31,9 +31,9 @@ export default function StatsView({ entries, onBack }: StatsProps) {
             </div>
 
             {/* 1. Taste Galaxy (Heatmap) */}
-            <Section title="1. The Taste Galaxy (Heatmap)">
+            <Section title="1. The Taste Heatmap">
                 <p className="opacity-70 mb-4 text-sm max-w-2xl">
-                    A visual map of where your ratings land. Darker squares mean more entries.
+                    A visual map of where your ratings land. Lighter squares mean more entries.
                     <br />
                     <span className="text-xs">Top-Left: Academic · Bottom-Right: Guilty Pleasure · Top-Right: Masterpiece</span>
                 </p>

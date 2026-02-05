@@ -16,9 +16,17 @@ import StatsView from "./Stats";
 // Local Storage Cache Manager
 const CACHE_KEY = "headandheart_entries_cache";
 const CACHE_VERSION_KEY = "headandheart_cache_version";
+const WISHLIST_CACHE_KEY = "headandheart_wishlist_cache";
+const WISHLIST_CACHE_VERSION_KEY = "headandheart_wishlist_cache_version";
 
 interface CacheData {
   entries: MediaEntry[];
+  timestamp: number;
+  version: number;
+}
+
+interface WishlistCacheData {
+  items: WishlistItem[];
   timestamp: number;
   version: number;
 }
@@ -56,6 +64,43 @@ function invalidateCache() {
     const version = parseInt(localStorage.getItem(CACHE_VERSION_KEY) || "0");
     localStorage.setItem(CACHE_VERSION_KEY, (version + 1).toString());
     localStorage.removeItem(CACHE_KEY);
+  } catch {
+    // Ignore localStorage errors
+  }
+}
+
+function getCachedWishlistItems(): WishlistItem[] | null {
+  try {
+    const cached = localStorage.getItem(WISHLIST_CACHE_KEY);
+    if (!cached) return null;
+    const data: WishlistCacheData = JSON.parse(cached);
+    const now = Date.now();
+    if (now - data.timestamp > 60 * 60 * 1000) return null;
+    return data.items;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedWishlistItems(items: WishlistItem[]) {
+  try {
+    const version = parseInt(localStorage.getItem(WISHLIST_CACHE_VERSION_KEY) || "0");
+    const data: WishlistCacheData = {
+      items,
+      timestamp: Date.now(),
+      version,
+    };
+    localStorage.setItem(WISHLIST_CACHE_KEY, JSON.stringify(data));
+  } catch {
+    // Ignore localStorage errors
+  }
+}
+
+function invalidateWishlistCache() {
+  try {
+    const version = parseInt(localStorage.getItem(WISHLIST_CACHE_VERSION_KEY) || "0");
+    localStorage.setItem(WISHLIST_CACHE_VERSION_KEY, (version + 1).toString());
+    localStorage.removeItem(WISHLIST_CACHE_KEY);
   } catch {
     // Ignore localStorage errors
   }
@@ -269,7 +314,8 @@ const RATING_LABELS = {
   br: "Guilty Pleasure", // Low Head, High Heart
 };
 
-type SortOption = "dateNewest" | "dateOldest" | "alphaAZ" | "alphaZA" | "rating";
+type LibrarySortOption = "dateNewest" | "dateOldest" | "alphaAZ" | "alphaZA" | "rating";
+type WishlistSortOption = "dateNewest" | "dateOldest" | "alphaAZ" | "alphaZA";
 
 interface MediaEntry {
   _id: Id<"mediaEntries">;
@@ -278,6 +324,14 @@ interface MediaEntry {
   headRating: number;
   heartRating: number;
   dateWatched: number;
+  notes?: string;
+}
+
+interface WishlistItem {
+  _id: Id<"wishlistItems">;
+  title: string;
+  type: MediaType;
+  dateAdded: number;
   notes?: string;
 }
 
@@ -332,6 +386,7 @@ function StatsLoadingSkeleton() {
 export default function App() {
   const [view, setView] = useState<"home" | "stats">("home");
   const [searchQuery, setSearchQuery] = useState("");
+  const [mode, setMode] = useState<"library" | "wishlist">("library");
   const [cachedEntries, setCachedEntriesState] = useState<MediaEntry[] | null>(() => getCachedEntries());
 
   return (
@@ -339,6 +394,13 @@ export default function App() {
       <Header
         currentView={view}
         onViewChange={setView}
+        mode={mode}
+        onModeChange={(nextMode) => {
+          setMode(nextMode);
+          if (nextMode === "wishlist" && view === "stats") {
+            setView("home");
+          }
+        }}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
       />
@@ -346,6 +408,7 @@ export default function App() {
         <Authenticated>
           {view === "home" ? (
             <Content 
+              mode={mode}
               searchQuery={searchQuery} 
               onSearchChange={setSearchQuery}
               cachedEntries={cachedEntries}
@@ -402,11 +465,15 @@ function StatsLoader({
 function Header({
   currentView,
   onViewChange,
+  mode,
+  onModeChange,
   searchQuery,
   onSearchChange,
 }: {
   currentView?: "home" | "stats";
   onViewChange?: (v: "home" | "stats") => void;
+  mode: "library" | "wishlist";
+  onModeChange: (m: "library" | "wishlist") => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
 }) {
@@ -414,6 +481,7 @@ function Header({
   const { signOut } = useAuthActions();
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const isWishlist = mode === "wishlist";
 
   return (
     <header className="header relative">
@@ -455,8 +523,18 @@ function Header({
               </button>
 
               <button
+                className={`btn btn-sm ${isWishlist ? "btn-primary" : "btn-secondary"}`}
+                onClick={() => onModeChange(isWishlist ? "library" : "wishlist")}
+                title={isWishlist ? "Exit wishlist mode" : "Enter wishlist mode"}
+              >
+                {Icons.heart}
+                <span className="hidden md:inline">{isWishlist ? "Wishlist" : "Library"}</span>
+              </button>
+
+              <button
                 className="btn btn-secondary btn-sm"
                 onClick={() => onViewChange?.("stats")}
+                disabled={isWishlist}
                 title="Taste Stats"
               >
                 {Icons.chart}
@@ -490,7 +568,7 @@ function Header({
                   }}
                 >
                   {Icons.chart}
-                  <span>Taste Stats</span>
+                  <span>Stats</span>
                 </button>
                 <a
                   href="https://indigo.spot"
@@ -500,8 +578,22 @@ function Header({
                   onClick={() => setMenuOpen(false)}
                 >
                   {Icons.home}
-                  <span>Indigo's Home</span>
+                  <span>Indigo's Site</span>
                 </a>
+                {!isWishlist && (
+                  <button
+                  className="dropdown-item"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    // Find the main Content component and open import modal
+                    // We'll use a custom event to trigger import modal in Content
+                    window.dispatchEvent(new CustomEvent("openImportModal"));
+                  }}
+                  >
+                  {Icons.upload}
+                  <span>Import</span>
+                  </button>
+                )}
                 <div className="dropdown-divider" />
                 <button
                   className="dropdown-item"
@@ -605,23 +697,33 @@ function SignInForm() {
 }
 
 function Content({ 
+  mode,
   searchQuery,
   cachedEntries,
   onEntriesUpdate
 }: { 
+  mode: "library" | "wishlist";
   searchQuery?: string; 
   onSearchChange: (q: string) => void;
   cachedEntries: MediaEntry[] | null;
   onEntriesUpdate: (entries: MediaEntry[]) => void;
 }) {
+  const isWishlist = mode === "wishlist";
   const [showAddForm, setShowAddForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [editingEntry, setEditingEntry] = useState<MediaEntry | null>(null);
+  const [editingWishlist, setEditingWishlist] = useState<WishlistItem | null>(null);
   const [typeFilter, setTypeFilter] = useState<MediaType | "all">("all");
-  const [sortOption, setSortOption] = useState<SortOption>("dateNewest");
+  const [librarySortOption, setLibrarySortOption] = useState<LibrarySortOption>("dateNewest");
+  const [wishlistSortOption, setWishlistSortOption] = useState<WishlistSortOption>("dateNewest");
   const [headWeight, setHeadWeight] = useState(50);
+  const [cachedWishlist, setCachedWishlist] = useState<WishlistItem[] | null>(() => getCachedWishlistItems());
 
   const entries = useQuery(api.mediaEntries.getMediaEntries, {
+    typeFilter: typeFilter === "all" ? undefined : typeFilter,
+  });
+
+  const wishlistItems = useQuery(api.wishlist.getWishlistItems, {
     typeFilter: typeFilter === "all" ? undefined : typeFilter,
   });
 
@@ -634,14 +736,47 @@ function Content({
     }
   }, [entries, onEntriesUpdate]);
 
-  // Use cached entries immediately while loading
-  const displayEntries = entries || cachedEntries;
+  // Close modals when switching modes
+  useEffect(() => {
+    setShowAddForm(false);
+    setShowImport(false);
+    setEditingEntry(null);
+    setEditingWishlist(null);
+  }, [mode]);
 
-  const sortedEntries = useMemo(() => {
-    if (!displayEntries) return [];
-    let processed = [...displayEntries];
+  // Open import modal when custom event is dispatched
+  useEffect(() => {
+    const handler = () => {
+      if (!isWishlist) {
+        setShowImport(true);
+      }
+    };
+    window.addEventListener("openImportModal", handler as EventListener);
+    return () => window.removeEventListener("openImportModal", handler as EventListener);
+  }, [isWishlist]);
 
-    // Search Filter
+  // Update wishlist cache when items change
+  useEffect(() => {
+    if (wishlistItems) {
+      const typed = wishlistItems as WishlistItem[];
+      setCachedWishlistItems(typed);
+      setCachedWishlist(typed);
+    }
+  }, [wishlistItems]);
+
+  // Ensure library sort stays valid when switching
+  useEffect(() => {
+    if (isWishlist && librarySortOption === "rating") {
+      setLibrarySortOption("dateNewest");
+    }
+  }, [isWishlist, librarySortOption]);
+
+  const libraryDisplayEntries = entries || cachedEntries;
+  const wishlistDisplayItems = wishlistItems || cachedWishlist;
+  const sortedLibraryEntries = useMemo(() => {
+    if (!libraryDisplayEntries) return [];
+    let processed = [...libraryDisplayEntries];
+
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       processed = processed.filter(e => {
@@ -654,7 +789,7 @@ function Content({
       });
     }
 
-    switch (sortOption) {
+    switch (librarySortOption) {
       case "dateNewest": processed.sort((a, b) => b.dateWatched - a.dateWatched); break;
       case "dateOldest": processed.sort((a, b) => a.dateWatched - b.dateWatched); break;
       case "alphaAZ": processed.sort((a, b) => a.title.localeCompare(b.title)); break;
@@ -668,7 +803,37 @@ function Content({
         break;
     }
     return processed;
-  }, [displayEntries, sortOption, headWeight, searchQuery]);
+  }, [libraryDisplayEntries, librarySortOption, headWeight, searchQuery]);
+
+  const sortedWishlistItems = useMemo(() => {
+    const source = wishlistDisplayItems ?? [];
+    let processed = [...source];
+
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      processed = processed.filter(e => {
+        const typeInfo = MEDIA_TYPES.find(t => t.value === e.type);
+        return (
+          e.title.toLowerCase().includes(q) ||
+          e.notes?.toLowerCase().includes(q) ||
+          typeInfo?.label.toLowerCase().includes(q)
+        );
+      });
+    }
+
+    switch (wishlistSortOption) {
+      case "dateNewest": processed.sort((a, b) => b.dateAdded - a.dateAdded); break;
+      case "dateOldest": processed.sort((a, b) => a.dateAdded - b.dateAdded); break;
+      case "alphaAZ": processed.sort((a, b) => a.title.localeCompare(b.title)); break;
+      case "alphaZA": processed.sort((a, b) => b.title.localeCompare(a.title)); break;
+    }
+    return processed;
+  }, [wishlistDisplayItems, wishlistSortOption, searchQuery]);
+
+  const sortOption = isWishlist ? wishlistSortOption : librarySortOption;
+  const isLoading = isWishlist
+    ? wishlistItems === undefined && !cachedWishlist
+    : entries === undefined && !cachedEntries;
 
   return (
     <div className="flex flex-col gap-4">
@@ -678,12 +843,9 @@ function Content({
           <div className="actions-stack">
             <button className="btn btn-primary btn-lg" onClick={() => setShowAddForm(true)}>
               {Icons.plus}
-              <span>Add</span>
+              <span>{isWishlist ? "Add to Wishlist" : "Add"}</span>
             </button>
-            <button className="btn btn-ghost btn-sm import-btn" onClick={() => setShowImport(true)}>
-              {Icons.upload}
-              <span>Import</span>
-            </button>
+            
           </div>
         </div>
 
@@ -713,16 +875,23 @@ function Content({
           <select
             className="select"
             value={sortOption}
-            onChange={(e) => setSortOption(e.target.value as SortOption)}
+            onChange={(e) => {
+              const val = e.target.value as LibrarySortOption & WishlistSortOption;
+              if (isWishlist) {
+                setWishlistSortOption(val as WishlistSortOption);
+              } else {
+                setLibrarySortOption(val as LibrarySortOption);
+              }
+            }}
           >
             <option value="dateNewest">Newest</option>
             <option value="dateOldest">Oldest</option>
             <option value="alphaAZ">A-Z</option>
             <option value="alphaZA">Z-A</option>
-            <option value="rating">Rating</option>
+            {!isWishlist && <option value="rating">Rating</option>}
           </select>
 
-          {sortOption === "rating" && (
+          {!isWishlist && sortOption === "rating" && (
             <div className="weight-slider">
               <span style={{ color: 'var(--color-secondary)' }}>Head {headWeight}%</span>
               <input
@@ -739,13 +908,15 @@ function Content({
         </div>
       </div>
 
-      {showAddForm && <EntryModal onClose={() => setShowAddForm(false)} />}
-      {showImport && <ImportModal existingEntries={entries || []} onClose={() => setShowImport(false)} />}
-      {editingEntry && <EntryModal entry={editingEntry} onClose={() => setEditingEntry(null)} />}
+      {showAddForm && !isWishlist && <EntryModal onClose={() => setShowAddForm(false)} />}
+      {showAddForm && isWishlist && <WishlistModal onClose={() => setShowAddForm(false)} />}
+      {showImport && !isWishlist && <ImportModal existingEntries={entries || []} onClose={() => setShowImport(false)} />}
+      {editingEntry && !isWishlist && <EntryModal entry={editingEntry} onClose={() => setEditingEntry(null)} />}
+      {editingWishlist && isWishlist && <WishlistModal item={editingWishlist} onClose={() => setEditingWishlist(null)} />}
 
-      {entries === undefined && !cachedEntries ? (
+      {isLoading ? (
         <LoadingSkeleton />
-      ) : sortedEntries.length === 0 ? (
+      ) : (isWishlist ? sortedWishlistItems.length === 0 : sortedLibraryEntries.length === 0) ? (
         <div className="empty-state">
           {searchQuery ? (
             <>
@@ -756,21 +927,29 @@ function Content({
           ) : (
             <>
               {Icons.empty}
-              <p>No entries yet</p>
+              <p>{isWishlist ? "No wishlist items yet" : "No entries yet"}</p>
               <p className="text-sm opacity-60">Add your first one</p>
             </>
           )}
         </div>
       ) : (
         <div className="entries-grid">
-          {sortedEntries.map((entry) => (
-            <MediaEntryCard
-              key={entry._id}
-              entry={entry}
-              headWeight={sortOption === "rating" ? headWeight : 50}
-              onEdit={() => setEditingEntry(entry)}
-            />
-          ))}
+          {isWishlist
+            ? sortedWishlistItems.map((item) => (
+                <WishlistCard
+                  key={item._id}
+                  item={item}
+                  onEdit={() => setEditingWishlist(item)}
+                />
+              ))
+            : sortedLibraryEntries.map((entry) => (
+                <MediaEntryCard
+                  key={entry._id}
+                  entry={entry}
+                  headWeight={sortOption === "rating" ? headWeight : 50}
+                  onEdit={() => setEditingEntry(entry)}
+                />
+              ))}
         </div>
       )}
     </div>
@@ -926,6 +1105,93 @@ function EntryModal({ entry, onClose }: { entry?: MediaEntry; onClose: () => voi
   );
 }
 
+function WishlistModal({ item, onClose }: { item?: WishlistItem; onClose: () => void }) {
+  const addItem = useMutation(api.wishlist.addWishlistItem);
+  const updateItem = useMutation(api.wishlist.updateWishlistItem);
+
+  const [title, setTitle] = useState(item?.title ?? "");
+  const [type, setType] = useState<MediaType>(item?.type ?? "movie");
+  const [dateAdded, setDateAdded] = useState(
+    item ? new Date(item.dateAdded).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]
+  );
+  const [notes, setNotes] = useState(item?.notes ?? "");
+  const [loading, setLoading] = useState(false);
+
+  const isEditing = !!item;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) return;
+    setLoading(true);
+    try {
+      const payload = {
+        title: title.trim(),
+        type,
+        dateAdded: new Date(dateAdded).getTime(),
+        notes: notes.trim() || undefined,
+      };
+
+      if (isEditing) {
+        await updateItem({ id: item._id, ...payload });
+      } else {
+        await addItem(payload);
+      }
+      invalidateWishlistCache();
+      onClose();
+    } catch (error) {
+      console.error("Failed to save wishlist item:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-xl mb-4 text-center">{isEditing ? "Edit Wishlist Item" : "Add to Wishlist"}</h2>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <input
+            className="input w-full"
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Title"
+            required
+          />
+          <div className="flex gap-2">
+            <select className="select flex-1" value={type} onChange={(e) => setType(e.target.value as MediaType)}>
+              {MEDIA_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+            <input
+              className="input flex-1"
+              type="date"
+              value={dateAdded}
+              onChange={(e) => setDateAdded(e.target.value)}
+            />
+          </div>
+
+          <textarea
+            className="input w-full resize-none"
+            rows={3}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Notes (optional)"
+          />
+
+          <div className="flex gap-2 justify-end">
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn btn-primary btn-sm" disabled={loading || !title.trim()}>
+              {loading ? "..." : isEditing ? "Save" : "Add"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function RatingGrid({
   headRating,
   heartRating,
@@ -985,6 +1251,69 @@ function RatingGrid({
 
 function getRatingColor(score: number) {
   return `hsl(${(score/5)*300- 180}, ${(score/5)*30 + 10}%, ${(score/5)*30 + 10}%)`;
+}
+
+function WishlistCard({
+  item,
+  onEdit,
+}: {
+  item: WishlistItem;
+  onEdit: () => void;
+}) {
+  const deleteItem = useMutation(api.wishlist.deleteWishlistItem);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const typeInfo = MEDIA_TYPES.find((t) => t.value.toUpperCase() === item.type.toUpperCase());
+  const formattedDate = new Date(item.dateAdded).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  return (
+    <div className="w-full card entry-card relative group p-0 overflow-hidden flex flex-col">
+      <div className={`entry-banner type-${item.type}`}>
+         <div className="entry-banner-fill w-full bg-[var(--color-primary)]" />
+        <div className="entry-banner-content">
+          <div className="flex items-center gap-2">
+            <span>{typeInfo?.icon} </span>
+            <span className="font-bold uppercase tracking-wider text-sm ">{typeInfo?.label}</span>
+          </div>
+          <div className="flex items-center gap-3 text-xs opacity-80 whitespace-nowrap">
+            <span className="px-2 py-1 rounded-full bg-black/20 text-white">Wishlist</span>
+            <span className="">Added {formattedDate}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-4 flex flex-col gap-2 flex-1">
+        <div className="flex justify-between items-start gap-2">
+          <div className="entry-title mb-0">{item.title}</div>
+          <div className="entry-actions shrink-0">
+            <button onClick={onEdit} title="Edit">{Icons.edit}</button>
+            <button onClick={() => setShowConfirm(true)} title="Delete">{Icons.trash}</button>
+          </div>
+        </div>
+
+        {item.notes && <p className="entry-notes mt-0 mb-0">"{item.notes}"</p>}
+
+      </div>
+
+      {showConfirm && (
+        <div className="confirm-overlay z-10">
+          <p className="text-sm">Delete?</p>
+          <div className="flex gap-2">
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowConfirm(false)}>No</button>
+            <button className="btn btn-danger btn-sm" onClick={() => {
+              deleteItem({ id: item._id });
+              invalidateWishlistCache();
+              setShowConfirm(false);
+            }}>Yes</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function MediaEntryCard({
