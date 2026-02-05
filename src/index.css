@@ -377,6 +377,7 @@ body {
 }
 
 .btn-ghost {
+
   background: transparent;
   border: 1px solid currentColor;
   opacity: 0.7;
@@ -711,8 +712,8 @@ body {
   }
 
   .modal-content .rating-grid {
-    width: min(160px, 70vw);
-    height: min(160px, 70vw);
+    width: min(250px, 70vw);
+    height: min(250px, 70vw);
     gap: 2px;
     padding: 4px;
   }

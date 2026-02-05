@@ -9,8 +9,9 @@ import {
 } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useState, useMemo, JSX } from "react";
+import { useState, useMemo, useEffect, JSX } from "react";
 import { Id } from "../convex/_generated/dataModel";
+import StatsView from "./Stats";
 
 // SVG Icons
 const Icons = {
@@ -25,6 +26,13 @@ const Icons = {
       <line x1="3" y1="6" x2="21" y2="6" />
       <line x1="3" y1="12" x2="21" y2="12" />
       <line x1="3" y1="18" x2="21" y2="18" />
+    </svg>
+  ),
+  chart: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="18" y1="20" x2="18" y2="10" />
+      <line x1="12" y1="20" x2="12" y2="4" />
+      <line x1="6" y1="20" x2="6" y2="14" />
     </svg>
   ),
   close: (
@@ -134,19 +142,69 @@ const MEDIA_TYPES: { value: MediaType; label: string; icon: JSX.Element }[] = [
 ];
 
 const RATING_DESCRIPTIONS = {
-  head: {
-    1: "Broken: Unfinished/Incompetent.",
-    2: "Flawed: Had potential, but failed.",
-    3: "Solid: Professional and clear.",
-    4: "Exceptional: Stands out from the crowd.",
-    5: "Masterpiece: Flawless/Revolutionary.",
+  default: {
+    head: {
+      1: "Broken: Unfinished/Incompetent.",
+      2: "Flawed: Had potential, but failed.",
+      3: "Solid: Professional and clear.",
+      4: "Exceptional: Stands out from the crowd.",
+      5: "Masterpiece: Flawless/Revolutionary.",
+    },
+    heart: {
+      1: "Painful: I wanted to quit.",
+      2: "Boring: I checked my phone.",
+      3: "Liked: Glad I watched it.",
+      4: "Captivated: I was fully locked in.",
+      5: "Amazing: The most fun I've ever had.",
+    }
   },
-  heart: {
-    1: "Painful: I wanted to quit.",
-    2: "Boring: I checked my phone.",
-    3: "Liked: Glad I watched it.",
-    4: "Captivated: I was fully locked in.",
-    5: "Soul-Stirring: Changed my life.",
+  book: {
+    head: {
+      1: "Unreadable: Poor grammar/structure.",
+      2: "Weak: Clunky prose or pacing.",
+      3: "Readable: Competent writing.",
+      4: "Beautiful: Eloquent and clever.",
+      5: "Literary: A triumph of language.",
+    },
+    heart: {
+      1: "Dull: I forced myself to finish.",
+      2: "Dry: Educational but dry.",
+      3: "Engaging: Hard to put down.",
+      4: "Gripping: Stayed up all night.",
+      5: "Profound: Changed how I think.",
+    }
+  },
+  videogame: {
+    head: {
+      1: "Broken: Buggy mess.",
+      2: "Clunky: Bad controls/UX.",
+      3: "Functional: Works as intended.",
+      4: "Polished: Tight controls/design.",
+      5: "Perfect: Mechanics are genius.",
+    },
+    heart: {
+      1: "Frustrating: Rage quit.",
+      2: "Grind: Felt like work.",
+      3: "Fun: Good loop.",
+      4: "Addictive: 'Just one more turn'.",
+      5: "Immersive: I lived in this world.",
+    }
+  },
+  boardgame: {
+    head: {
+      1: "Broken: Rules makes no sense.",
+      2: "Unbalanced: Solved/Exploitable.",
+      3: "Balanced: Fair and functional.",
+      4: "Elegant: Smart mechanics.",
+      5: "Genius: Perfect system design.",
+    },
+    heart: {
+      1: "Boring: Everyone checked phones.",
+      2: "Tedious: Too much downtime.",
+      3: "Fun: Good social interactions.",
+      4: "Exciting: Great tension/moments.",
+      5: "Legendary: Talk about it for years.",
+    }
   }
 } as const;
 
@@ -170,12 +228,18 @@ interface MediaEntry {
 }
 
 export default function App() {
+  const [view, setView] = useState<"home" | "stats">("home");
+
   return (
     <>
-      <Header />
+      <Header currentView={view} onViewChange={setView} />
       <main className="p-3 md:p-6 max-w-5xl mx-auto">
         <Authenticated>
-          <Content />
+          {view === "home" ? (
+            <Content />
+          ) : (
+            <StatsLoader onBack={() => setView("home")} />
+          )}
         </Authenticated>
         <Unauthenticated>
           <WelcomeSection />
@@ -185,49 +249,90 @@ export default function App() {
   );
 }
 
-function Header() {
+function StatsLoader({ onBack }: { onBack: () => void }) {
+  const entries = useQuery(api.mediaEntries.getMediaEntries, { typeFilter: undefined });
+  if (!entries) return <div className="text-center py-12 opacity-50">Loading stats...</div>;
+
+  // Cast entries to ensure types match (Convex types can be loose, but our interface is strict)
+  return <StatsView entries={entries as MediaEntry[]} onBack={onBack} />;
+}
+
+function Header({ currentView, onViewChange }: { currentView?: "home" | "stats"; onViewChange?: (v: "home" | "stats") => void }) {
   const { isAuthenticated } = useConvexAuth();
   const { signOut } = useAuthActions();
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <header className="header">
-      <div className="logo">
+      <div className="logo cursor-pointer" onClick={() => onViewChange?.("home")}>
         <span className="logo-icon">{Icons.heart}</span>
         <span>HeadandHeart</span>
       </div>
 
       {isAuthenticated && (
-        <div className="dropdown">
-          <button className="menu-btn" onClick={() => setMenuOpen(!menuOpen)}>
-            {menuOpen ? Icons.close : Icons.menu}
-          </button>
-
-          {menuOpen && (
-            <div className="dropdown-menu">
-              <a
-                href="https://indigo.spot"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="dropdown-item"
-                onClick={() => setMenuOpen(false)}
-              >
-                {Icons.home}
-                <span>My Website</span>
-              </a>
-              <div className="dropdown-divider" />
-              <button
-                className="dropdown-item"
-                onClick={() => {
-                  void signOut();
-                  setMenuOpen(false);
-                }}
-              >
-                {Icons.signOut}
-                <span>Sign Out</span>
-              </button>
-            </div>
+        <div className="flex items-center gap-2">
+          {currentView === "home" && (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => onViewChange?.("stats")}
+              title="Taste Stats"
+            >
+              {Icons.chart}
+              <span className="hidden md:inline">Stats</span>
+            </button>
           )}
+
+          <div className="dropdown">
+            <button className="menu-btn" onClick={() => setMenuOpen(!menuOpen)}>
+              {menuOpen ? Icons.close : Icons.menu}
+            </button>
+
+            {menuOpen && (
+              <div className="dropdown-menu">
+                <button
+                  className="dropdown-item"
+                  onClick={() => {
+                    onViewChange?.("home");
+                    setMenuOpen(false);
+                  }}
+                >
+                  {Icons.home}
+                  <span>Home</span>
+                </button>
+                <button
+                  className="dropdown-item"
+                  onClick={() => {
+                    onViewChange?.("stats");
+                    setMenuOpen(false);
+                  }}
+                >
+                  {Icons.chart}
+                  <span>Taste Stats</span>
+                </button>
+                <a
+                  href="https://indigo.spot"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="dropdown-item"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  {Icons.home}
+                  <span>My Website</span>
+                </a>
+                <div className="dropdown-divider" />
+                <button
+                  className="dropdown-item"
+                  onClick={() => {
+                    void signOut();
+                    setMenuOpen(false);
+                  }}
+                >
+                  {Icons.signOut}
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </header>
@@ -346,7 +451,7 @@ function Content() {
       </div>
 
       {showAddForm && <EntryModal onClose={() => setShowAddForm(false)} />}
-      {showImport && <ImportModal onClose={() => setShowImport(false)} />}
+      {showImport && <ImportModal existingEntries={entries || []} onClose={() => setShowImport(false)} />}
       {editingEntry && <EntryModal entry={editingEntry} onClose={() => setEditingEntry(null)} />}
 
       <div className="filter-bar">
@@ -434,6 +539,8 @@ function EntryModal({ entry, onClose }: { entry?: MediaEntry; onClose: () => voi
   const [notes, setNotes] = useState(entry?.notes ?? "");
   const [loading, setLoading] = useState(false);
 
+
+
   const isEditing = !!entry;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -469,6 +576,49 @@ function EntryModal({ entry, onClose }: { entry?: MediaEntry; onClose: () => voi
     }
   };
 
+  // Keyboard navigation & Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tagName = (document.activeElement as HTMLElement).tagName;
+
+      // Enter key for submit (unless in notes textarea)
+      if (e.key === 'Enter' && !e.shiftKey) {
+        if (tagName === 'TEXTAREA') return; // Allow newlines in notes
+        // If in Title input, native form submit handles it.
+        // If focusing nothing (on grid), we want to submit.
+        // We only trigger if NOT on a button (buttons handle themselves)
+        if (tagName !== 'BUTTON') {
+          e.preventDefault();
+          // We pass a dummy event because handleSubmit expects one
+          handleSubmit({ preventDefault: () => { } } as React.FormEvent);
+        }
+        return;
+      }
+
+      // Arrow keys (only if no input focused)
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tagName)) return;
+
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setHeadRating(h => Math.min(5, h + 1));
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setHeadRating(h => Math.max(1, h - 1));
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        setHeartRating(h => Math.max(1, h - 1));
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        setHeartRating(h => Math.min(5, h + 1));
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [headRating, heartRating, title, type, dateWatched, notes, isEditing, loading]);
+  // Added deps because handleSubmit uses them. 
+  // Since handleSubmit is re-created every render, this effect re-runs every render.
+  // This is acceptable for a modal.
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -499,7 +649,15 @@ function EntryModal({ entry, onClose }: { entry?: MediaEntry; onClose: () => voi
           <RatingGrid
             headRating={headRating}
             heartRating={heartRating}
+            type={type}
             onSelect={(head, heart) => { setHeadRating(head); setHeartRating(heart); }}
+          />
+
+          <input
+            className="input w-full mt-2"
+            type="date"
+            value={dateWatched}
+            onChange={(e) => setDateWatched(e.target.value)}
           />
 
           <textarea
@@ -525,24 +683,31 @@ function EntryModal({ entry, onClose }: { entry?: MediaEntry; onClose: () => voi
 function RatingGrid({
   headRating,
   heartRating,
+  type,
   onSelect,
 }: {
   headRating: number;
   heartRating: number;
+  type?: MediaType;
   onSelect: (head: number, heart: number) => void;
 }) {
+  const descriptions = (type && type in RATING_DESCRIPTIONS && type !== 'movie' && type !== 'tvshow')
+    ? RATING_DESCRIPTIONS[type as keyof typeof RATING_DESCRIPTIONS]
+    : RATING_DESCRIPTIONS.default;
+
   const cells = [];
   for (let row = 0; row < 5; row++) {
     for (let col = 0; col < 5; col++) {
       const heart = col + 1;
       const head = 5 - row;
       const isSelected = head === headRating && heart === heartRating;
+
       cells.push(
         <div
           key={`${head}-${heart}`}
           className={`rating-cell ${isSelected ? "selected" : ""}`}
           onClick={() => onSelect(head, heart)}
-          title={`Head: ${head} - ${RATING_DESCRIPTIONS.head[head as keyof typeof RATING_DESCRIPTIONS.head]}\nHeart: ${heart} - ${RATING_DESCRIPTIONS.heart[heart as keyof typeof RATING_DESCRIPTIONS.heart]}`}
+          title={`Head: ${head} - ${descriptions.head[head as keyof typeof descriptions.head]}\nHeart: ${heart} - ${descriptions.heart[heart as keyof typeof descriptions.heart]}`}
         />
       );
     }
@@ -560,12 +725,12 @@ function RatingGrid({
         <div className="rating-grid">{cells}</div>
       </div>
 
-      <div className="rating-display flex flex-col gap-1 text-center text-sm">
-        <div className="font-bold">Head {headRating}/5 · Heart {heartRating}/5</div>
-        <div className="opacity-75 text-xs">
-          {RATING_DESCRIPTIONS.head[headRating as keyof typeof RATING_DESCRIPTIONS.head]}
+      <div className="rating-display flex flex-col gap-1 text-center text-md ">
+        <div className="font-bold opacity-75">Head {headRating}/5 · Heart {heartRating}/5</div>
+        <div className="text-md">
+          {descriptions.head[headRating as keyof typeof descriptions.head]}
           <br />
-          {RATING_DESCRIPTIONS.heart[heartRating as keyof typeof RATING_DESCRIPTIONS.heart]}
+          {descriptions.heart[heartRating as keyof typeof descriptions.heart]}
         </div>
       </div>
     </div >
@@ -705,7 +870,7 @@ function parseCSV(text: string): ImportedEntry[] {
   return entries;
 }
 
-function ImportModal({ onClose }: { onClose: () => void }) {
+function ImportModal({ existingEntries, onClose }: { existingEntries: MediaEntry[]; onClose: () => void }) {
   const addEntry = useMutation(api.mediaEntries.addMediaEntry);
 
   const [importType, setImportType] = useState<'favourites.me'>('favourites.me');
@@ -713,6 +878,8 @@ function ImportModal({ onClose }: { onClose: () => void }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [headRating, setHeadRating] = useState(3);
   const [heartRating, setHeartRating] = useState(3);
+  const [dateWatched, setDateWatched] = useState("");
+  const [selectionMode, setSelectionMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [importedCount, setImportedCount] = useState(0);
   const [skippedCount, setSkippedCount] = useState(0);
@@ -728,11 +895,31 @@ function ImportModal({ onClose }: { onClose: () => void }) {
       const text = event.target?.result as string;
       const parsed = parseCSV(text);
       setEntries(parsed);
-      setCurrentIndex(0);
-      setHeadRating(3);
-      setHeartRating(3);
+
+      // Auto-recommend start index based on existing
+      let recIndex = 0;
+      const existingTitles = new Set(existingEntries.map(e => e.title.toLowerCase().trim()));
+
+      for (let i = 0; i < parsed.length; i++) {
+        if (!existingTitles.has(parsed[i].title.toLowerCase().trim())) {
+          recIndex = i;
+          break;
+        }
+      }
+
+      setCurrentIndex(recIndex);
+      setSelectionMode(true);
     };
     reader.readAsText(file);
+  };
+
+  const startImport = () => {
+    setSelectionMode(false);
+    setHeadRating(3);
+    setHeartRating(3);
+    if (entries[currentIndex]) {
+      setDateWatched(new Date(entries[currentIndex].dateWatched).toISOString().split('T')[0]);
+    }
   };
 
   const handleImport = async () => {
@@ -740,12 +927,13 @@ function ImportModal({ onClose }: { onClose: () => void }) {
     setLoading(true);
 
     try {
+
       await addEntry({
         title: currentEntry.title,
         type: currentEntry.type,
         headRating,
         heartRating,
-        dateWatched: currentEntry.dateWatched,
+        dateWatched: dateWatched ? new Date(dateWatched).getTime() : Date.now(),
         notes: currentEntry.notes || undefined,
       });
       setImportedCount(c => c + 1);
@@ -762,19 +950,120 @@ function ImportModal({ onClose }: { onClose: () => void }) {
     moveToNext();
   };
 
+
+
+  // Enter key mapping
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        // Don't trigger if user is typing in a textarea (e.g. notes)
+        if (document.activeElement instanceof HTMLTextAreaElement) return;
+
+        // Only trigger if we are in the main import flow (not selection mode, not done)
+        if (!selectionMode && entries.length > 0 && currentEntry && !loading) {
+          e.preventDefault();
+          handleImport();
+        }
+      }
+
+      // Rating Navigation
+      if (!selectionMode && entries.length > 0 && currentEntry && !['INPUT', 'TEXTAREA', 'SELECT'].includes((document.activeElement as HTMLElement).tagName)) {
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setHeadRating(h => Math.min(5, h + 1));
+        } else if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setHeadRating(h => Math.max(1, h - 1));
+        } else if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          setHeartRating(h => Math.max(1, h - 1));
+        } else if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          setHeartRating(h => Math.min(5, h + 1));
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectionMode, entries, currentEntry, headRating, heartRating, dateWatched, loading, /* deps for handleImport closure */]);
+
   const moveToNext = () => {
     if (currentIndex < entries.length - 1) {
       setCurrentIndex(currentIndex + 1);
       setHeadRating(3);
       setHeartRating(3);
+      const nextEnt = entries[currentIndex + 1];
+      if (nextEnt) {
+        setDateWatched(new Date(nextEnt.dateWatched).toISOString().split('T')[0]);
+      }
     } else {
-      // Done
+      // Done - ensure we update index to trigger completion view
+      setCurrentIndex(entries.length);
       setEntries([]);
     }
   };
 
-  // Final summary
-  if (entries.length > 0 && currentIndex >= entries.length - 1 && !currentEntry) {
+  // Selection Mode UI
+  if (selectionMode && entries.length > 0) {
+    return (
+      <div className="modal-overlay" onClick={onClose}>
+        <div className="modal-content !max-w-2xl" onClick={e => e.stopPropagation()}>
+          <h2 className="text-xl mb-2 text-center">Select Start Row</h2>
+          <p className="text-center text-sm opacity-70 mb-4">
+            Found {entries.length} rows. We recommend starting at row {currentIndex + 1}.
+          </p>
+
+          <div className="max-h-[50vh] overflow-y-auto border border-black/10 rounded mb-4">
+            <table className="w-full text-sm text-left border-collapse">
+              <thead className="bg-black/5 sticky top-0">
+                <tr>
+                  <th className="p-2">#</th>
+                  <th className="p-2">Title</th>
+                  <th className="p-2">Date</th>
+                  <th className="p-2">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map((ent, idx) => {
+                  const exists = existingEntries.some(e => e.title.toLowerCase().trim() === ent.title.toLowerCase().trim());
+                  const isSelected = idx === currentIndex;
+                  return (
+                    <tr
+                      key={idx}
+                      className={`cursor-pointer border-b border-black/5 hover:bg-black/5 ${isSelected ? 'bg-[var(--color-secondary)]/20' : ''}`}
+                      onClick={() => setCurrentIndex(idx)}
+                    >
+                      <td className="p-2 opacity-50">{idx + 1}</td>
+                      <td className="p-2 font-medium">{ent.title}</td>
+                      <td className="p-2 opacity-70">{new Date(ent.dateWatched).toLocaleDateString()}</td>
+                      <td className="p-2">
+                        {exists ? (
+                          <span className="text-xs bg-yellow-100 text-yellow-800 px-1 rounded">Exists</span>
+                        ) : (
+                          <span className="text-xs bg-green-100 text-green-800 px-1 rounded">New</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex gap-2 justify-end">
+            <button className="btn btn-ghost" onClick={() => setEntries([])}>Cancel</button>
+            <button className="btn btn-primary" onClick={startImport}>
+              Start from Row {currentIndex + 1}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Import Complete UI
+  if (entries.length > 0 && !selectionMode && (currentIndex >= entries.length || !currentEntry)) {
     return (
       <div className="modal-overlay" onClick={onClose}>
         <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -827,7 +1116,7 @@ function ImportModal({ onClose }: { onClose: () => void }) {
             <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
           </div>
         ) : (
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
             {/* Progress */}
             <div className="text-center text-sm opacity-70">
               Entry {currentIndex + 1} of {entries.length}
@@ -837,12 +1126,10 @@ function ImportModal({ onClose }: { onClose: () => void }) {
             {currentEntry && (
               <>
                 <div className="card bg-[var(--color-lavender)]/20 p-3">
-                  <h3 className="font-bold text-lg">{currentEntry.title}</h3>
-                  <div className="flex gap-2 mt-2 text-sm opacity-80 flex-wrap">
+                  <h3 className="font-bold text-2xl">{currentEntry.title}</h3>
+                  <div className="flex gap-2 mt-2 text-md opacity-80 flex-wrap">
                     <span className={`type-badge type-${currentEntry.type}`}>
                       {MEDIA_TYPES.find(t => t.value === currentEntry.type)?.icon}
-                      {' '}
-                      {MEDIA_TYPES.find(t => t.value === currentEntry.type)?.label}
                     </span>
                     <span>Original: {currentEntry.originalRating}/100</span>
                   </div>
@@ -853,10 +1140,10 @@ function ImportModal({ onClose }: { onClose: () => void }) {
 
                 {/* Rating Selection */}
                 <div>
-                  <label className="block mb-1 opacity-70 text-sm">Set Head & Heart Rating</label>
                   <RatingGrid
                     headRating={headRating}
                     heartRating={heartRating}
+                    type={currentEntry.type}
                     onSelect={(head, heart) => {
                       setHeadRating(head);
                       setHeartRating(heart);
