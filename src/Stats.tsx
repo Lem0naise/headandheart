@@ -58,7 +58,7 @@ export default function StatsView({ entries, onBack }: StatsProps) {
 
             {/* 3. Personality Archetypes */}
             <Section title="3. Reviewer Archetype">
-                <div className="bg-gradient-to-br from-[var(--color-card)] to-[var(--color-card-dark)] p-6 rounded-xl border border-[var(--color-primary)] text-center max-w-2xl mx-auto shadow-lg">
+                <div className=" bg-[var(--color-card-dark)] p-6 rounded-xl border border-[var(--color-primary)] text-center max-w-2xl mx-auto shadow-lg">
                     <div className="text-6xl mb-4">{stats.archetype.emoji}</div>
                     <h3 className="text-2xl font-bold mb-2">{stats.archetype.name}</h3>
                     <p className="opacity-80 text-lg">{stats.archetype.description}</p>
@@ -68,7 +68,7 @@ export default function StatsView({ entries, onBack }: StatsProps) {
             {/* 4. Media-Type Battle */}
             <Section title="4. Media-Type Battle">
                 <div className="flex flex-col gap-6">
-                    <div className="flex flex-wrap gap-4 justify-center">
+                    <div className="bg-[var(--color-card)] p-2 rounded-xl border border-[var(--color-primary)] text-center max-w-2xl mx-auto shadow-lg flex flex-wrap gap-4 justify-center">
                         {stats.mediaAverages.map((m) => (
                             <div key={m.type} className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border border-black/10 type-${m.type} text-[var(--color-dark)]`}>
                                 <span className="uppercase">{m.type}</span>
@@ -248,7 +248,7 @@ function MediaScatterPlot({ entries }: { entries: MediaEntry[] }) {
     }
 
     return (
-        <div className="w-full max-w-[400px] mx-auto bg-white/50 border border-black/10 rounded-xl p-4 aspect-square relative">
+        <div className="w-full max-w-[400px] mx-auto bg-[var(--color-card-dark)] border border-black/10 rounded-xl p-4 aspect-square relative">
             <svg viewBox={`0 0 ${size} ${size}`} className="w-full h-full overflow-visible">
                 {/* Grid Lines */}
                 {[1, 2, 3, 4, 5].map(i => (

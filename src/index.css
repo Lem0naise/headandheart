@@ -6,8 +6,8 @@
 @theme {
   --color-light: #fef7f0;
   --color-dark: #2d2a32;
-  --color-primary: #e8a4c9;
-  --color-secondary: #a4c9e8;
+  --color-primary: #f8a4c9;
+  --color-secondary: #a4c9f8;
   --color-accent: #c9e8a4;
   --color-lavender: #c4b5e0;
   --color-peach: #f5c6a4;
@@ -128,6 +128,11 @@ body {
   transition: background 0.15s;
 }
 
+.dropdown-item svg {
+  width: 24px;
+  height: 24px;
+}
+
 .dropdown-item:hover {
   background: rgba(0, 0, 0, 0.05);
 }
@@ -168,71 +173,61 @@ body {
 @media (min-width: 768px) {
   .entries-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    /* Reduced min-width from 320px to 240px for better density */
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
     gap: 1rem;
   }
 
   .entry-card {
-    padding: 1.25rem;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 100%;
   }
 
   .entry-title {
-    font-size: 1.4rem;
-    margin-bottom: 0.75rem;
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    line-height: 1.1;
   }
 
   .entry-meta {
-    margin-bottom: 0.75rem;
+    margin-bottom: 0;
   }
 }
 
+/* Mobile table-style entries */
 /* Mobile table-style entries */
 @media (max-width: 767px) {
   .entries-grid {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.75rem;
   }
 
+  /* We now use the main flex layout on mobile too, so no specific grid overrides needed aside from maybe spacing */
   .entry-card {
-    padding: 0.75rem;
-    display: grid;
-    grid-template-columns: 1fr auto;
-    grid-template-rows: auto auto;
-    gap: 0.25rem 0.5rem;
-    align-items: center;
-  }
-
-  .entry-title {
-    font-size: 1.1rem;
-    grid-column: 1;
-    grid-row: 1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .entry-meta {
-    grid-column: 1 / -1;
-    grid-row: 2;
+    /* Ensure it behaves like a normal flex card */
     display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.85rem;
-  }
-
-  .entry-actions {
-    grid-column: 2;
-    grid-row: 1;
-  }
-
-  .entry-notes {
-    display: none;
+    flex-direction: column;
   }
 }
 
 /* Entry card elements */
+.entry-card {
+  position: relative;
+}
+
+.entry-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+}
+
 .entry-title {
+  font-size: 1.5rem;
   font-weight: bold;
   line-height: 1.2;
 }
@@ -256,15 +251,19 @@ body {
   border: none;
   cursor: pointer;
   padding: 0.25rem;
-  opacity: 0.5;
+  opacity: 0.3;
   transition: opacity 0.15s;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
+.entry-card:hover .entry-actions button {
+  opacity: 0.7;
+}
+
 .entry-actions button:hover {
-  opacity: 1;
+  opacity: 1 !important;
 }
 
 .entry-actions svg {
@@ -273,27 +272,94 @@ body {
 }
 
 .entry-notes {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   opacity: 0.75;
   font-style: italic;
-  margin-top: 0.5rem;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  background: rgba(0, 0, 0, 0.03);
+  line-height: 0.9rem;
+  border-radius: 4px;
+}
+
+/* Redesigned Elements */
+
+/* Type Pill: Combined Icon + Label */
+/* Banner / Header */
+.entry-banner {
+  width: 100%;
+  padding: 0.5rem 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--color-dark);
+  /* Default text color */
+}
+
+/* Banner specific colors */
+.type-movie.entry-banner {
+  background: var(--color-primary);
+}
+
+.type-book.entry-banner {
+  background: var(--color-lavender);
+}
+
+.type-tvshow.entry-banner {
+  background: var(--color-secondary);
+}
+
+.type-videogame.entry-banner {
+  background: var(--color-accent);
+}
+
+.type-boardgame.entry-banner {
+  background: var(--color-peach);
+}
+
+/* Rating Layout */
+.rating-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rating-score-large {
+  font-size: 1.8rem;
+  font-weight: bold;
+  line-height: 1;
+  color: var(--color-dark);
+  text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.05);
+}
+
+.rating-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0;
+}
+
+/* Rating bar overrides/updates */
+.rating-bar {
+  height: 12px;
+  border-radius: 3px;
+  overflow: hidden;
+  display: flex;
+  background: rgba(0, 0, 0, 0.1);
+  width: 100%;
+}
+
+.rating-subtext {
+  font-size: 0.7rem;
+  opacity: 0.7;
+  display: flex;
+  justify-content: space-between;
 }
 
 /* Rating bar */
-.rating-bar {
-  height: 8px;
-  border-radius: 4px;
-  overflow: hidden;
-  display: flex;
-  background: #e0e0e0;
-  flex: 1;
-  min-width: 60px;
-  max-width: 120px;
-}
 
 .rating-bar-head {
   background: var(--color-secondary);
@@ -303,42 +369,6 @@ body {
 .rating-bar-heart {
   background: var(--color-primary);
   transition: width 0.3s ease;
-}
-
-/* Type badge */
-.type-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.type-badge svg {
-  width: 14px;
-  height: 14px;
-}
-
-.type-movie {
-  background: var(--color-primary);
-}
-
-.type-book {
-  background: var(--color-lavender);
-}
-
-.type-tvshow {
-  background: var(--color-secondary);
-}
-
-.type-videogame {
-  background: var(--color-accent);
-}
-
-.type-boardgame {
-  background: var(--color-peach);
 }
 
 /* Button styles */

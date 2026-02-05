@@ -317,7 +317,7 @@ function Header({ currentView, onViewChange }: { currentView?: "home" | "stats";
                   onClick={() => setMenuOpen(false)}
                 >
                   {Icons.home}
-                  <span>My Website</span>
+                  <span>Indigo's Home</span>
                 </a>
                 <div className="dropdown-divider" />
                 <button
@@ -764,28 +764,50 @@ function MediaEntryCard({
   const heartPortion = (entry.heartRating / maxScore) * heartW * 100;
 
   return (
-    <div className="card entry-card relative">
-      <div className="entry-title">{entry.title}</div>
+    <div className="card entry-card relative group p-0 overflow-hidden flex flex-col">
+      {/* Banner / Header */}
+      <div className={`entry-banner type-${entry.type}`}>
+        <div className="flex items-center gap-2">
+          {typeInfo?.icon}
+          <span className="font-bold uppercase tracking-wider text-sm">{typeInfo?.label}</span>
 
-      <div className="entry-actions">
-        <button onClick={onEdit} title="Edit">{Icons.edit}</button>
-        <button onClick={() => setShowConfirm(true)} title="Delete">{Icons.trash}</button>
-      </div>
-
-      <div className="entry-meta">
-        <span className={`type-badge type-${entry.type}`}>{typeInfo?.icon}</span>
-        <span>{formattedDate}</span>
-        <div className="rating-bar">
-          <div className="rating-bar-head" style={{ width: `${headPortion}%` }} />
-          <div className="rating-bar-heart" style={{ width: `${heartPortion}%` }} />
         </div>
-        <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>{totalScore.toFixed(1)}</span>
+        <span className="text-xs opacity-50 whitespace-nowrap">{formattedDate}</span>
+        <div className="rating-score-large text-white">
+          {totalScore.toFixed(1)}
+        </div>
       </div>
 
-      {entry.notes && <p className="entry-notes">"{entry.notes}"</p>}
+      {/* Content Body */}
+      <div className="p-4 flex flex-col gap-3 flex-1">
+        <div className="flex justify-between items-start gap-2">
+          <div className="entry-title mb-0">{entry.title}</div>
+          <div className="entry-actions shrink-0">
+            <button onClick={onEdit} title="Edit">{Icons.edit}</button>
+            <button onClick={() => setShowConfirm(true)} title="Delete">{Icons.trash}</button>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between text-xs opacity-50">
+
+        </div>
+
+        <div className="rating-details mt-auto">
+          <div className="rating-bar">
+            <div className="rating-bar-head h-full" style={{ width: `${headPortion}%` }} />
+            <div className="rating-bar-heart h-full" style={{ width: `${heartPortion}%` }} />
+          </div>
+          <div className="rating-subtext mt-1">
+            <span>Hd {entry.headRating}</span>
+            <span>Ht {entry.heartRating}</span>
+          </div>
+        </div>
+
+        {entry.notes && <p className="entry-notes mt-0">"{entry.notes}"</p>}
+      </div>
 
       {showConfirm && (
-        <div className="confirm-overlay">
+        <div className="confirm-overlay z-10">
           <p className="text-sm">Delete?</p>
           <div className="flex gap-2">
             <button className="btn btn-ghost btn-sm" onClick={() => setShowConfirm(false)}>No</button>
