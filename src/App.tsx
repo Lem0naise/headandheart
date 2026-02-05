@@ -474,7 +474,7 @@ function SignInForm() {
   );
 }
 
-function Content({ searchQuery, onSearchChange }: { searchQuery?: string; onSearchChange: (q: string) => void }) {
+function Content({ searchQuery}: { searchQuery?: string; onSearchChange: (q: string) => void }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [editingEntry, setEditingEntry] = useState<MediaEntry | null>(null);
