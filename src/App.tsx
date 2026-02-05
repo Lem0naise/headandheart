@@ -152,7 +152,7 @@ const RATING_DESCRIPTIONS = {
     head: {
       1: "Broken: Unfinished/Incompetent.",
       2: "Flawed: Had potential, but failed.",
-      3: "Solid: Professional and clear.",
+      3: "Solid: Well-made.",
       4: "Exceptional: Stands out from the crowd.",
       5: "Masterpiece: Flawless/Revolutionary.",
     },
@@ -754,19 +754,12 @@ function EntryModal({ entry, onClose }: { entry?: MediaEntry; onClose: () => voi
             onSelect={(head, heart) => { setHeadRating(head); setHeartRating(heart); }}
           />
 
-          <input
-            className="input w-full mt-2"
-            type="date"
-            value={dateWatched}
-            onChange={(e) => setDateWatched(e.target.value)}
-          />
-
           <textarea
             className="input w-full resize-none"
             rows={2}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Notes (optional)"
+            placeholder="Review (optional)"
           />
 
           <div className="flex gap-2 justify-end">
@@ -839,9 +832,7 @@ function RatingGrid({
 }
 
 function getRatingColor(score: number) {
-  const clamped = Math.max(0, Math.min(5, score));
-  const hue = (clamped / 5) * 120; // 0 = red, 120 = green
-  return `hsl(${hue}, 40%, 40%)`;
+  return `hsl(${(score/5)*300- 180}, ${(score/5)*30 + 10}%, ${(score/5)*30 + 10}%)`;
 }
 
 function MediaEntryCard({
@@ -856,7 +847,7 @@ function MediaEntryCard({
   const deleteEntry = useMutation(api.mediaEntries.deleteMediaEntry);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const typeInfo = MEDIA_TYPES.find((t) => t.value === entry.type);
+  const typeInfo = MEDIA_TYPES.find((t) => t.value.toUpperCase() === entry.type.toUpperCase());
   const formattedDate = new Date(entry.dateWatched).toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
@@ -877,13 +868,13 @@ function MediaEntryCard({
         <div className="entry-banner-fill" style={{ width: `${scorePercent}%`, background: bannerColor }} />
         <div className="entry-banner-content">
           <div className="flex items-center gap-2">
-            {typeInfo?.icon}
-            <span className="font-bold uppercase tracking-wider text-sm">{typeInfo?.label}</span>
+            <span>{typeInfo?.icon} </span>
+            <span className="font-bold uppercase tracking-wider text-sm ">{typeInfo?.label}</span>
           </div>
           <div className="flex items-center gap-3 text-xs opacity-80 whitespace-nowrap">
 
-            <span className="opacity-75">Hd {entry.headRating}</span>
-            <span className="opacity-75">Ht {entry.heartRating}</span>
+            <span className="opacity-75">Head {entry.headRating}</span>
+            <span className="opacity-75">Heart {entry.heartRating}</span>
             
             <span>{formattedDate}</span>
             

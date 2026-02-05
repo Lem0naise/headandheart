@@ -334,6 +334,10 @@ body {
 
   color: var(--color-card);
 }
+.entry-banner-content svg {
+  height: 20px;
+  width: 20px;
+}
 
 .type-movie.entry-banner { --type-accent: var(--color-primary); }
 .type-book.entry-banner { --type-accent: var(--color-lavender); }
