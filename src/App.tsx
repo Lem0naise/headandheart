@@ -23,15 +23,17 @@ interface CacheData {
   entries: MediaEntry[];
   timestamp: number;
   version: number;
+  filter?: string;
 }
 
 interface WishlistCacheData {
   items: WishlistItem[];
   timestamp: number;
   version: number;
+  filter?: string;
 }
 
-function getCachedEntries(): MediaEntry[] | null {
+function getCachedEntries(): { entries: MediaEntry[]; filter?: string } | null {
   try {
     const cached = localStorage.getItem(CACHE_KEY);
     if (!cached) return null;
@@ -39,19 +41,20 @@ function getCachedEntries(): MediaEntry[] | null {
     // Cache is valid for 1 hour or until version changes
     const now = Date.now();
     if (now - data.timestamp > 60 * 60 * 1000) return null;
-    return data.entries;
+    return { entries: data.entries, filter: data.filter };
   } catch {
     return null;
   }
 }
 
-function setCachedEntries(entries: MediaEntry[]) {
+function setCachedEntries(entries: MediaEntry[], filter?: string) {
   try {
     const version = parseInt(localStorage.getItem(CACHE_VERSION_KEY) || "0");
     const data: CacheData = {
       entries,
       timestamp: Date.now(),
       version,
+      filter,
     };
     localStorage.setItem(CACHE_KEY, JSON.stringify(data));
   } catch {
@@ -69,26 +72,27 @@ function invalidateCache() {
   }
 }
 
-function getCachedWishlistItems(): WishlistItem[] | null {
+function getCachedWishlistItems(): { items: WishlistItem[]; filter?: string } | null {
   try {
     const cached = localStorage.getItem(WISHLIST_CACHE_KEY);
     if (!cached) return null;
     const data: WishlistCacheData = JSON.parse(cached);
     const now = Date.now();
     if (now - data.timestamp > 60 * 60 * 1000) return null;
-    return data.items;
+    return { items: data.items, filter: data.filter };
   } catch {
     return null;
   }
 }
 
-function setCachedWishlistItems(items: WishlistItem[]) {
+function setCachedWishlistItems(items: WishlistItem[], filter?: string) {
   try {
     const version = parseInt(localStorage.getItem(WISHLIST_CACHE_VERSION_KEY) || "0");
     const data: WishlistCacheData = {
       items,
       timestamp: Date.now(),
       version,
+      filter,
     };
     localStorage.setItem(WISHLIST_CACHE_KEY, JSON.stringify(data));
   } catch {
@@ -387,7 +391,7 @@ export default function App() {
   const [view, setView] = useState<"home" | "stats">("home");
   const [searchQuery, setSearchQuery] = useState("");
   const [mode, setMode] = useState<"library" | "wishlist">("library");
-  const [cachedEntries, setCachedEntriesState] = useState<MediaEntry[] | null>(() => getCachedEntries());
+  const [cachedData, setCachedData] = useState<{ entries: MediaEntry[], filter?: string } | null>(() => getCachedEntries());
 
   return (
     <>
@@ -407,18 +411,18 @@ export default function App() {
       <main className="p-3 md:p-6 max-w-5xl mx-auto">
         <Authenticated>
           {view === "home" ? (
-            <Content 
+            <Content
               mode={mode}
-              searchQuery={searchQuery} 
+              searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
-              cachedEntries={cachedEntries}
-              onEntriesUpdate={setCachedEntriesState}
+              cachedData={cachedData}
+              onEntriesUpdate={(entries, filter) => setCachedData({ entries, filter })}
             />
           ) : (
-            <StatsLoader 
+            <StatsLoader
               onBack={() => setView("home")}
-              cachedEntries={cachedEntries}
-              onEntriesUpdate={setCachedEntriesState}
+              cachedData={cachedData}
+              onEntriesUpdate={(entries, filter) => setCachedData({ entries, filter })}
             />
           )}
         </Authenticated>
@@ -430,29 +434,29 @@ export default function App() {
   );
 }
 
-function StatsLoader({ 
-  onBack, 
-  cachedEntries,
-  onEntriesUpdate 
-}: { 
+function StatsLoader({
+  onBack,
+  cachedData,
+  onEntriesUpdate
+}: {
   onBack: () => void;
-  cachedEntries: MediaEntry[] | null;
-  onEntriesUpdate: (entries: MediaEntry[]) => void;
+  cachedData: { entries: MediaEntry[], filter?: string } | null;
+  onEntriesUpdate: (entries: MediaEntry[], filter?: string) => void;
 }) {
   const entries = useQuery(api.mediaEntries.getMediaEntries, { typeFilter: undefined });
-  
+
   // Update cache when entries are loaded
   useEffect(() => {
     if (entries) {
       const typedEntries = entries as MediaEntry[];
-      setCachedEntries(typedEntries);
-      onEntriesUpdate(typedEntries);
+      setCachedEntries(typedEntries, undefined);
+      onEntriesUpdate(typedEntries, undefined);
     }
   }, [entries, onEntriesUpdate]);
 
-  // Show cached data immediately while loading
-  if (!entries && cachedEntries) {
-    return <StatsView entries={cachedEntries} onBack={onBack} />;
+  // Show cached data immediately while loading - only if it represents ALL data (no filter)
+  if (!entries && cachedData && !cachedData.filter) {
+    return <StatsView entries={cachedData.entries} onBack={onBack} />;
   }
 
   if (!entries) {
@@ -582,16 +586,16 @@ function Header({
                 </a>
                 {!isWishlist && (
                   <button
-                  className="dropdown-item"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    // Find the main Content component and open import modal
-                    // We'll use a custom event to trigger import modal in Content
-                    window.dispatchEvent(new CustomEvent("openImportModal"));
-                  }}
+                    className="dropdown-item"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      // Find the main Content component and open import modal
+                      // We'll use a custom event to trigger import modal in Content
+                      window.dispatchEvent(new CustomEvent("openImportModal"));
+                    }}
                   >
-                  {Icons.upload}
-                  <span>Import</span>
+                    {Icons.upload}
+                    <span>Import</span>
                   </button>
                 )}
                 <div className="dropdown-divider" />
@@ -696,17 +700,18 @@ function SignInForm() {
   );
 }
 
-function Content({ 
+function Content({
   mode,
   searchQuery,
-  cachedEntries,
+  onSearchChange,
+  cachedData,
   onEntriesUpdate
-}: { 
+}: {
   mode: "library" | "wishlist";
-  searchQuery?: string; 
+  searchQuery?: string;
   onSearchChange: (q: string) => void;
-  cachedEntries: MediaEntry[] | null;
-  onEntriesUpdate: (entries: MediaEntry[]) => void;
+  cachedData: { entries: MediaEntry[], filter?: string } | null;
+  onEntriesUpdate: (entries: MediaEntry[], filter?: string) => void;
 }) {
   const isWishlist = mode === "wishlist";
   const [showAddForm, setShowAddForm] = useState(false);
@@ -714,10 +719,10 @@ function Content({
   const [editingEntry, setEditingEntry] = useState<MediaEntry | null>(null);
   const [editingWishlist, setEditingWishlist] = useState<WishlistItem | null>(null);
   const [typeFilter, setTypeFilter] = useState<MediaType | "all">("all");
-  const [librarySortOption, setLibrarySortOption] = useState<LibrarySortOption>("dateNewest");
+  const [librarySortOption, setLibrarySortOption] = useState<LibrarySortOption>("rating");
   const [wishlistSortOption, setWishlistSortOption] = useState<WishlistSortOption>("dateNewest");
   const [headWeight, setHeadWeight] = useState(50);
-  const [cachedWishlist, setCachedWishlist] = useState<WishlistItem[] | null>(() => getCachedWishlistItems());
+  const [cachedWishlistData, setCachedWishlistData] = useState<{ items: WishlistItem[], filter?: string } | null>(() => getCachedWishlistItems());
 
   const entries = useQuery(api.mediaEntries.getMediaEntries, {
     typeFilter: typeFilter === "all" ? undefined : typeFilter,
@@ -731,10 +736,11 @@ function Content({
   useEffect(() => {
     if (entries) {
       const typedEntries = entries as MediaEntry[];
-      setCachedEntries(typedEntries);
-      onEntriesUpdate(typedEntries);
+      const filter = typeFilter === "all" ? undefined : typeFilter;
+      setCachedEntries(typedEntries, filter);
+      onEntriesUpdate(typedEntries, filter);
     }
-  }, [entries, onEntriesUpdate]);
+  }, [entries, onEntriesUpdate, typeFilter]);
 
   // Close modals when switching modes
   useEffect(() => {
@@ -759,10 +765,11 @@ function Content({
   useEffect(() => {
     if (wishlistItems) {
       const typed = wishlistItems as WishlistItem[];
-      setCachedWishlistItems(typed);
-      setCachedWishlist(typed);
+      const filter = typeFilter === "all" ? undefined : typeFilter;
+      setCachedWishlistItems(typed, filter);
+      setCachedWishlistData({ items: typed, filter });
     }
-  }, [wishlistItems]);
+  }, [wishlistItems, typeFilter]);
 
   // Ensure library sort stays valid when switching
   useEffect(() => {
@@ -771,8 +778,10 @@ function Content({
     }
   }, [isWishlist, librarySortOption]);
 
-  const libraryDisplayEntries = entries || cachedEntries;
-  const wishlistDisplayItems = wishlistItems || cachedWishlist;
+  const currentFilter = typeFilter === "all" ? undefined : typeFilter;
+  const libraryDisplayEntries = entries || (cachedData && cachedData.filter === currentFilter ? cachedData.entries : null);
+  const wishlistDisplayItems = wishlistItems || (cachedWishlistData && cachedWishlistData.filter === currentFilter ? cachedWishlistData.items : null);
+
   const sortedLibraryEntries = useMemo(() => {
     if (!libraryDisplayEntries) return [];
     let processed = [...libraryDisplayEntries];
@@ -832,20 +841,54 @@ function Content({
 
   const sortOption = isWishlist ? wishlistSortOption : librarySortOption;
   const isLoading = isWishlist
-    ? wishlistItems === undefined && !cachedWishlist
-    : entries === undefined && !cachedEntries;
+    ? wishlistItems === undefined && !wishlistDisplayItems
+    : entries === undefined && !libraryDisplayEntries;
 
   return (
     <div className="flex flex-col gap-4">
       <div className="control-bar card">
         <div className="control-row control-row-top">
-          
+
           <div className="actions-stack">
             <button className="btn btn-primary btn-lg" onClick={() => setShowAddForm(true)}>
               {Icons.plus}
               <span>{isWishlist ? "Add to Wishlist" : "Add"}</span>
             </button>
-            
+            <div className="control-row sort-row">
+              <select
+                className="select"
+                value={sortOption}
+                onChange={(e) => {
+                  const val = e.target.value as LibrarySortOption & WishlistSortOption;
+                  if (isWishlist) {
+                    setWishlistSortOption(val as WishlistSortOption);
+                  } else {
+                    setLibrarySortOption(val as LibrarySortOption);
+                  }
+                }}
+              >
+                <option value="dateNewest">Newest</option>
+                <option value="dateOldest">Oldest</option>
+                <option value="alphaAZ">A-Z</option>
+                <option value="alphaZA">Z-A</option>
+                {!isWishlist && <option value="rating">Rating</option>}
+              </select>
+
+              {!isWishlist && sortOption === "rating" && (
+                <div className="weight-slider">
+                  <span style={{ color: 'var(--color-secondary)' }}>Head {headWeight}%</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={headWeight}
+                    onChange={(e) => setHeadWeight(Number(e.target.value))}
+                    className="slider"
+                  />
+                  <span style={{ color: 'var(--color-primary)' }}>{100 - headWeight}% Heart</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -870,42 +913,7 @@ function Content({
           </div>
         </div>
 
-        <div className="control-row sort-row">
-          <label className="sort-label">Sort</label>
-          <select
-            className="select"
-            value={sortOption}
-            onChange={(e) => {
-              const val = e.target.value as LibrarySortOption & WishlistSortOption;
-              if (isWishlist) {
-                setWishlistSortOption(val as WishlistSortOption);
-              } else {
-                setLibrarySortOption(val as LibrarySortOption);
-              }
-            }}
-          >
-            <option value="dateNewest">Newest</option>
-            <option value="dateOldest">Oldest</option>
-            <option value="alphaAZ">A-Z</option>
-            <option value="alphaZA">Z-A</option>
-            {!isWishlist && <option value="rating">Rating</option>}
-          </select>
 
-          {!isWishlist && sortOption === "rating" && (
-            <div className="weight-slider">
-              <span style={{ color: 'var(--color-secondary)' }}>Head {headWeight}%</span>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={headWeight}
-                onChange={(e) => setHeadWeight(Number(e.target.value))}
-                className="slider"
-              />
-              <span style={{ color: 'var(--color-primary)' }}>{100 - headWeight}% Heart</span>
-            </div>
-          )}
-        </div>
       </div>
 
       {showAddForm && !isWishlist && <EntryModal onClose={() => setShowAddForm(false)} />}
@@ -936,20 +944,20 @@ function Content({
         <div className="entries-grid">
           {isWishlist
             ? sortedWishlistItems.map((item) => (
-                <WishlistCard
-                  key={item._id}
-                  item={item}
-                  onEdit={() => setEditingWishlist(item)}
-                />
-              ))
+              <WishlistCard
+                key={item._id}
+                item={item}
+                onEdit={() => setEditingWishlist(item)}
+              />
+            ))
             : sortedLibraryEntries.map((entry) => (
-                <MediaEntryCard
-                  key={entry._id}
-                  entry={entry}
-                  headWeight={sortOption === "rating" ? headWeight : 50}
-                  onEdit={() => setEditingEntry(entry)}
-                />
-              ))}
+              <MediaEntryCard
+                key={entry._id}
+                entry={entry}
+                headWeight={sortOption === "rating" ? headWeight : 50}
+                onEdit={() => setEditingEntry(entry)}
+              />
+            ))}
         </div>
       )}
     </div>
@@ -1250,7 +1258,7 @@ function RatingGrid({
 }
 
 function getRatingColor(score: number) {
-  return `hsl(${(score/5)*300- 180}, ${(score/5)*30 + 10}%, ${(score/5)*30 + 10}%)`;
+  return `hsl(${(score / 5) * 300 - 180}, ${(score / 5) * 30 + 10}%, ${(score / 5) * 30 + 10}%)`;
 }
 
 function WishlistCard({
@@ -1273,7 +1281,7 @@ function WishlistCard({
   return (
     <div className="w-full card entry-card relative group p-0 overflow-hidden flex flex-col">
       <div className={`entry-banner type-${item.type}`}>
-         <div className="entry-banner-fill w-full bg-[var(--color-primary)]" />
+        <div className="entry-banner-fill w-full bg-[var(--color-primary)]" />
         <div className="entry-banner-content">
           <div className="flex items-center gap-2">
             <span>{typeInfo?.icon} </span>
@@ -1356,9 +1364,9 @@ function MediaEntryCard({
 
             <span className="opacity-75">Head {entry.headRating}</span>
             <span className="opacity-75">Heart {entry.heartRating}</span>
-            
+
             <span>{formattedDate}</span>
-            
+
             <span className="rating-score-large text-white drop-shadow" aria-label={`Total ${totalScore.toFixed(1)}`}>
               {totalScore.toFixed(1)}
             </span>
@@ -1374,7 +1382,7 @@ function MediaEntryCard({
             <button onClick={onEdit} title="Edit">{Icons.edit}</button>
             <button onClick={() => setShowConfirm(true)} title="Delete">{Icons.trash}</button>
           </div>
-          
+
         </div>
 
         {entry.notes && <p className="entry-notes mt-0 mb-0">"{entry.notes}"</p>}

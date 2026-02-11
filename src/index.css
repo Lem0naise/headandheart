@@ -334,16 +334,31 @@ body {
 
   color: var(--color-card);
 }
+
 .entry-banner-content svg {
   height: 20px;
   width: 20px;
 }
 
-.type-movie.entry-banner { --type-accent: var(--color-primary); }
-.type-book.entry-banner { --type-accent: var(--color-lavender); }
-.type-tvshow.entry-banner { --type-accent: var(--color-secondary); }
-.type-videogame.entry-banner { --type-accent: var(--color-accent); }
-.type-boardgame.entry-banner { --type-accent: var(--color-peach); }
+.type-movie.entry-banner {
+  --type-accent: var(--color-primary);
+}
+
+.type-book.entry-banner {
+  --type-accent: var(--color-lavender);
+}
+
+.type-tvshow.entry-banner {
+  --type-accent: var(--color-secondary);
+}
+
+.type-videogame.entry-banner {
+  --type-accent: var(--color-accent);
+}
+
+.type-boardgame.entry-banner {
+  --type-accent: var(--color-peach);
+}
 
 /* Rating Layout */
 .rating-details {
@@ -408,6 +423,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+  margin-left: 10px;
 }
 
 .btn svg {
@@ -961,9 +977,11 @@ body {
   0% {
     opacity: 0.6;
   }
+
   50% {
     opacity: 1;
   }
+
   100% {
     opacity: 0.6;
   }
