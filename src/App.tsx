@@ -703,7 +703,6 @@ function SignInForm() {
 function Content({
   mode,
   searchQuery,
-  onSearchChange,
   cachedData,
   onEntriesUpdate
 }: {
