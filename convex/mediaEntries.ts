@@ -91,7 +91,7 @@ export const updateMediaEntry = mutation({
             throw new Error("Not authenticated");
         }
 
-        const entry = await ctx.db.get(args.id);
+        const entry = await ctx.db.get("mediaEntries", args.id);
         if (!entry) {
             throw new Error("Entry not found");
         }
@@ -115,7 +115,7 @@ export const updateMediaEntry = mutation({
         if (args.dateWatched !== undefined) updates.dateWatched = args.dateWatched;
         if (args.notes !== undefined) updates.notes = args.notes;
 
-        await ctx.db.patch(args.id, updates);
+        await ctx.db.patch("mediaEntries", args.id, updates);
     },
 });
 
@@ -130,7 +130,7 @@ export const deleteMediaEntry = mutation({
             throw new Error("Not authenticated");
         }
 
-        const entry = await ctx.db.get(args.id);
+        const entry = await ctx.db.get("mediaEntries", args.id);
         if (!entry) {
             throw new Error("Entry not found");
         }
@@ -138,6 +138,6 @@ export const deleteMediaEntry = mutation({
             throw new Error("Not authorized to delete this entry");
         }
 
-        await ctx.db.delete(args.id);
+        await ctx.db.delete("mediaEntries", args.id);
     },
 });

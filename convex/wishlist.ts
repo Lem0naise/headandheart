@@ -73,7 +73,7 @@ export const updateWishlistItem = mutation({
       throw new Error("Not authenticated");
     }
 
-    const item = await ctx.db.get(args.id);
+    const item = await ctx.db.get("wishlistItems", args.id);
     if (!item) {
       throw new Error("Item not found");
     }
@@ -87,7 +87,7 @@ export const updateWishlistItem = mutation({
     if (args.dateAdded !== undefined) updates.dateAdded = args.dateAdded;
     if (args.notes !== undefined) updates.notes = args.notes;
 
-    await ctx.db.patch(args.id, updates);
+    await ctx.db.patch("wishlistItems", args.id, updates);
   },
 });
 
@@ -100,7 +100,7 @@ export const deleteWishlistItem = mutation({
       throw new Error("Not authenticated");
     }
 
-    const item = await ctx.db.get(args.id);
+    const item = await ctx.db.get("wishlistItems", args.id);
     if (!item) {
       throw new Error("Item not found");
     }
@@ -108,6 +108,6 @@ export const deleteWishlistItem = mutation({
       throw new Error("Not authorized to delete this item");
     }
 
-    await ctx.db.delete(args.id);
+    await ctx.db.delete("wishlistItems", args.id);
   },
 });

@@ -6,111 +6,64 @@ import {
   useConvexAuth,
   useMutation,
   useQuery,
+  useAction,
 } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useState, useMemo, useEffect, JSX } from "react";
-import { Id } from "../convex/_generated/dataModel";
-import StatsView from "./Stats";
+import { useState, useMemo, useEffect, useRef, useCallback, lazy, Suspense, type JSX } from "react";
+import type { MediaType, MediaEntry, WishlistItem, CurrentlyItem, LibrarySortOption, WishlistSortOption, CurrentlySortOption, AppMode } from "./types";
 
-// Local Storage Cache Manager
+const StatsView = lazy(() => import("./Stats"));
+
 const CACHE_KEY = "headandheart_entries_cache";
 const CACHE_VERSION_KEY = "headandheart_cache_version";
 const WISHLIST_CACHE_KEY = "headandheart_wishlist_cache";
 const WISHLIST_CACHE_VERSION_KEY = "headandheart_wishlist_cache_version";
+const CURRENTLY_CACHE_KEY = "headandheart_currently_cache";
+const CURRENTLY_CACHE_VERSION_KEY = "headandheart_currently_cache_version";
 
-interface CacheData {
-  entries: MediaEntry[];
+interface CacheData<T> {
+  data: T[];
   timestamp: number;
   version: number;
   filter?: string;
 }
 
-interface WishlistCacheData {
-  items: WishlistItem[];
-  timestamp: number;
-  version: number;
-  filter?: string;
-}
-
-function getCachedEntries(): { entries: MediaEntry[]; filter?: string } | null {
+function getCached<T>(key: string, _versionKey: string): { data: T[]; filter?: string } | null {
   try {
-    const cached = localStorage.getItem(CACHE_KEY);
+    const cached = localStorage.getItem(key);
     if (!cached) return null;
-    const data: CacheData = JSON.parse(cached);
-    // Cache is valid for 1 hour or until version changes
-    const now = Date.now();
-    if (now - data.timestamp > 60 * 60 * 1000) return null;
-    return { entries: data.entries, filter: data.filter };
-  } catch {
-    return null;
-  }
+    const parsed: CacheData<T> = JSON.parse(cached);
+    if (Date.now() - parsed.timestamp > 60 * 60 * 1000) return null;
+    return { data: parsed.data, filter: parsed.filter };
+  } catch { return null; }
 }
 
-function setCachedEntries(entries: MediaEntry[], filter?: string) {
+function setCached<T>(key: string, versionKey: string, data: T[], filter?: string) {
   try {
-    const version = parseInt(localStorage.getItem(CACHE_VERSION_KEY) || "0");
-    const data: CacheData = {
-      entries,
-      timestamp: Date.now(),
-      version,
-      filter,
-    };
-    localStorage.setItem(CACHE_KEY, JSON.stringify(data));
-  } catch {
-    // Ignore localStorage errors
-  }
+    const version = parseInt(localStorage.getItem(versionKey) || "0");
+    localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now(), version, filter }));
+  } catch { /* ignore */ }
 }
 
-function invalidateCache() {
+function invalidateCacheKey(key: string, versionKey: string) {
   try {
-    const version = parseInt(localStorage.getItem(CACHE_VERSION_KEY) || "0");
-    localStorage.setItem(CACHE_VERSION_KEY, (version + 1).toString());
-    localStorage.removeItem(CACHE_KEY);
-  } catch {
-    // Ignore localStorage errors
-  }
+    const version = parseInt(localStorage.getItem(versionKey) || "0");
+    localStorage.setItem(versionKey, (version + 1).toString());
+    localStorage.removeItem(key);
+  } catch { /* ignore */ }
 }
 
-function getCachedWishlistItems(): { items: WishlistItem[]; filter?: string } | null {
-  try {
-    const cached = localStorage.getItem(WISHLIST_CACHE_KEY);
-    if (!cached) return null;
-    const data: WishlistCacheData = JSON.parse(cached);
-    const now = Date.now();
-    if (now - data.timestamp > 60 * 60 * 1000) return null;
-    return { items: data.items, filter: data.filter };
-  } catch {
-    return null;
-  }
-}
+const getCachedEntries = () => getCached<MediaEntry>(CACHE_KEY, CACHE_VERSION_KEY);
+const setCachedEntries = (data: MediaEntry[], filter?: string) => setCached(CACHE_KEY, CACHE_VERSION_KEY, data, filter);
+const invalidateCache = () => invalidateCacheKey(CACHE_KEY, CACHE_VERSION_KEY);
+const getCachedWishlistItems = () => getCached<WishlistItem>(WISHLIST_CACHE_KEY, WISHLIST_CACHE_VERSION_KEY);
+const setCachedWishlistItems = (data: WishlistItem[], filter?: string) => setCached(WISHLIST_CACHE_KEY, WISHLIST_CACHE_VERSION_KEY, data, filter);
+const invalidateWishlistCache = () => invalidateCacheKey(WISHLIST_CACHE_KEY, WISHLIST_CACHE_VERSION_KEY);
+const getCachedCurrentlyItems = () => getCached<CurrentlyItem>(CURRENTLY_CACHE_KEY, CURRENTLY_CACHE_VERSION_KEY);
+const setCachedCurrentlyItems = (data: CurrentlyItem[], filter?: string) => setCached(CURRENTLY_CACHE_KEY, CURRENTLY_CACHE_VERSION_KEY, data, filter);
+const invalidateCurrentlyCache = () => invalidateCacheKey(CURRENTLY_CACHE_KEY, CURRENTLY_CACHE_VERSION_KEY);
 
-function setCachedWishlistItems(items: WishlistItem[], filter?: string) {
-  try {
-    const version = parseInt(localStorage.getItem(WISHLIST_CACHE_VERSION_KEY) || "0");
-    const data: WishlistCacheData = {
-      items,
-      timestamp: Date.now(),
-      version,
-      filter,
-    };
-    localStorage.setItem(WISHLIST_CACHE_KEY, JSON.stringify(data));
-  } catch {
-    // Ignore localStorage errors
-  }
-}
-
-function invalidateWishlistCache() {
-  try {
-    const version = parseInt(localStorage.getItem(WISHLIST_CACHE_VERSION_KEY) || "0");
-    localStorage.setItem(WISHLIST_CACHE_VERSION_KEY, (version + 1).toString());
-    localStorage.removeItem(WISHLIST_CACHE_KEY);
-  } catch {
-    // Ignore localStorage errors
-  }
-}
-
-// SVG Icons
 const Icons = {
   logo: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -231,10 +184,23 @@ const Icons = {
       <line x1="21" y1="21" x2="16.65" y2="16.65" />
     </svg>
   ),
+  play: (
+    <svg viewBox="0 0 24 24" fill="currentColor">
+      <path d="M8 5v14l11-7z" />
+    </svg>
+  ),
+  check: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <polyline points="20,6 9,17 4,12" />
+    </svg>
+  ),
+  undo: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <polyline points="1,4 1,10 7,10" />
+      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+    </svg>
+  ),
 };
-
-// Media types
-type MediaType = "movie" | "book" | "tvshow" | "videogame" | "boardgame";
 
 const MEDIA_TYPES: { value: MediaType; label: string; icon: JSX.Element }[] = [
   { value: "movie", label: "Movie", icon: Icons.movie },
@@ -312,56 +278,34 @@ const RATING_DESCRIPTIONS = {
 } as const;
 
 const RATING_LABELS = {
-  tl: "Cold Perfection", // High Head, Low Heart
-  tr: "Transcendental", // High Head, High Heart
-  bl: "Trash", // Low Head, Low Heart
-  br: "Guilty Pleasure", // Low Head, High Heart
+  tl: "Cold Perfection",
+  tr: "Transcendental",
+  bl: "Trash",
+  br: "Guilty Pleasure",
 };
 
-type LibrarySortOption = "dateNewest" | "dateOldest" | "alphaAZ" | "alphaZA" | "rating";
-type WishlistSortOption = "dateNewest" | "dateOldest" | "alphaAZ" | "alphaZA";
-
-interface MediaEntry {
-  _id: Id<"mediaEntries">;
-  title: string;
-  type: MediaType;
-  headRating: number;
-  heartRating: number;
-  dateWatched: number;
-  notes?: string;
-}
-
-interface WishlistItem {
-  _id: Id<"wishlistItems">;
-  title: string;
-  type: MediaType;
-  dateAdded: number;
-  notes?: string;
-}
-
-// Loading Skeleton Component
 function LoadingSkeleton() {
   return (
     <div className="flex flex-col gap-4 animate-pulse">
       <div className="control-bar card">
         <div className="control-row control-row-top">
-          <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded w-32"></div>
-          <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded w-32"></div>
+          <div className="h-10 bg-white/10 rounded w-32"></div>
+          <div className="h-10 bg-white/10 rounded w-32"></div>
         </div>
         <div className="control-row filter-row gap-2">
           {[...Array(6)].map((_, i) => (
-            <div key={i} className="h-10 bg-gray-200 dark:bg-gray-700 rounded w-20"></div>
+            <div key={i} className="h-10 bg-white/10 rounded w-20"></div>
           ))}
         </div>
       </div>
       <div className="entries-grid">
         {[...Array(6)].map((_, i) => (
           <div key={i} className="card entry-card p-0 overflow-hidden">
-            <div className="h-12 bg-gray-200 dark:bg-gray-700"></div>
+            <div className="h-12 bg-white/5"></div>
             <div className="p-4 flex flex-col gap-3">
-              <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
-              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
-              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-2/3"></div>
+              <div className="h-6 bg-white/10 rounded w-3/4"></div>
+              <div className="h-4 bg-white/10 rounded w-full"></div>
+              <div className="h-4 bg-white/10 rounded w-2/3"></div>
             </div>
           </div>
         ))}
@@ -374,24 +318,47 @@ function StatsLoadingSkeleton() {
   return (
     <div className="flex flex-col gap-8 pb-12 animate-pulse">
       <div className="flex items-center gap-4 mb-2">
-        <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded w-24"></div>
-        <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-48"></div>
+        <div className="h-10 bg-white/10 rounded w-24"></div>
+        <div className="h-8 bg-white/10 rounded w-48"></div>
       </div>
       {[...Array(3)].map((_, i) => (
         <div key={i} className="card p-6">
-          <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-64 mb-4"></div>
-          <div className="h-64 bg-gray-200 dark:bg-gray-700 rounded"></div>
+          <div className="h-6 bg-white/10 rounded w-64 mb-4"></div>
+          <div className="h-64 bg-white/10 rounded"></div>
         </div>
       ))}
     </div>
   );
 }
 
+const modeOrder: AppMode[] = ["library", "currently", "wishlist"];
+
+function nextMode(m: AppMode): AppMode {
+  const idx = modeOrder.indexOf(m);
+  return modeOrder[(idx + 1) % modeOrder.length];
+}
+
+function modeLabel(m: AppMode): string {
+  if (m === "library") return "Library";
+  if (m === "currently") return "Currently";
+  return "Wishlist";
+}
+
+function modeActiveClass(m: AppMode): string {
+  if (m === "library") return "active-library";
+  if (m === "currently") return "active-currently";
+  return "active-wishlist";
+}
+
 export default function App() {
   const [view, setView] = useState<"home" | "stats">("home");
   const [searchQuery, setSearchQuery] = useState("");
-  const [mode, setMode] = useState<"library" | "wishlist">("library");
-  const [cachedData, setCachedData] = useState<{ entries: MediaEntry[], filter?: string } | null>(() => getCachedEntries());
+  const [mode, setMode] = useState<AppMode>("library");
+  const [cachedData, setCachedData] = useState<{ data: MediaEntry[]; filter?: string } | null>(() => getCachedEntries());
+
+  const handleEntriesUpdate = useCallback((data: MediaEntry[], filter?: string) => {
+    setCachedData({ data, filter });
+  }, []);
 
   return (
     <>
@@ -399,12 +366,7 @@ export default function App() {
         currentView={view}
         onViewChange={setView}
         mode={mode}
-        onModeChange={(nextMode) => {
-          setMode(nextMode);
-          if (nextMode === "wishlist" && view === "stats") {
-            setView("home");
-          }
-        }}
+        onModeChange={setMode}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
       />
@@ -416,14 +378,16 @@ export default function App() {
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
               cachedData={cachedData}
-              onEntriesUpdate={(entries, filter) => setCachedData({ entries, filter })}
+              onEntriesUpdate={handleEntriesUpdate}
             />
           ) : (
-            <StatsLoader
-              onBack={() => setView("home")}
-              cachedData={cachedData}
-              onEntriesUpdate={(entries, filter) => setCachedData({ entries, filter })}
-            />
+            <Suspense fallback={<StatsLoadingSkeleton />}>
+              <StatsLoader
+                onBack={() => setView("home")}
+                cachedData={cachedData}
+                onEntriesUpdate={handleEntriesUpdate}
+              />
+            </Suspense>
           )}
         </Authenticated>
         <Unauthenticated>
@@ -440,12 +404,11 @@ function StatsLoader({
   onEntriesUpdate
 }: {
   onBack: () => void;
-  cachedData: { entries: MediaEntry[], filter?: string } | null;
+  cachedData: { data: MediaEntry[]; filter?: string } | null;
   onEntriesUpdate: (entries: MediaEntry[], filter?: string) => void;
 }) {
   const entries = useQuery(api.mediaEntries.getMediaEntries, { typeFilter: undefined });
 
-  // Update cache when entries are loaded
   useEffect(() => {
     if (entries) {
       const typedEntries = entries as MediaEntry[];
@@ -454,9 +417,8 @@ function StatsLoader({
     }
   }, [entries, onEntriesUpdate]);
 
-  // Show cached data immediately while loading - only if it represents ALL data (no filter)
   if (!entries && cachedData && !cachedData.filter) {
-    return <StatsView entries={cachedData.entries} onBack={onBack} />;
+    return <StatsView entries={cachedData.data} onBack={onBack} />;
   }
 
   if (!entries) {
@@ -476,8 +438,8 @@ function Header({
 }: {
   currentView?: "home" | "stats";
   onViewChange?: (v: "home" | "stats") => void;
-  mode: "library" | "wishlist";
-  onModeChange: (m: "library" | "wishlist") => void;
+  mode: AppMode;
+  onModeChange: (m: AppMode) => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
 }) {
@@ -485,7 +447,6 @@ function Header({
   const { signOut } = useAuthActions();
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
-  const isWishlist = mode === "wishlist";
 
   return (
     <header className="header relative">
@@ -493,10 +454,8 @@ function Header({
         <div className="logo cursor-pointer shrink-0" onClick={() => onViewChange?.("home")}>
           <span className="logo-icon">{Icons.heart}</span>
           <span className="inline">HeadandHeart</span>
-
         </div>
 
-        {/* Desktop Search */}
         {isAuthenticated && currentView === "home" && (
           <div className="hidden md:block flex-1 max-w-sm">
             <div className="relative">
@@ -512,12 +471,10 @@ function Header({
         )}
       </div>
 
-
       {isAuthenticated && (
         <div className="flex items-center gap-2">
           {currentView === "home" && (
             <>
-              {/* Mobile Search Toggle */}
               <button
                 className="btn btn-secondary btn-sm md:!hidden px-2"
                 onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
@@ -527,18 +484,17 @@ function Header({
               </button>
 
               <button
-                className={`btn btn-sm ${isWishlist ? "btn-primary" : "btn-secondary"}`}
-                onClick={() => onModeChange(isWishlist ? "library" : "wishlist")}
-                title={isWishlist ? "Exit wishlist mode" : "Enter wishlist mode"}
+                className={`mode-cycle-pill ${modeActiveClass(mode)}`}
+                onClick={() => onModeChange(nextMode(mode))}
+                title={`Switch to ${modeLabel(nextMode(mode))}`}
               >
-                {Icons.heart}
-                <span className="hidden md:inline">{isWishlist ? "Wishlist" : "Library"}</span>
+                <span className="hidden sm:inline">{modeLabel(mode)}</span>
+                <span className="sm:hidden">{mode === "library" ? "Lib" : mode === "currently" ? "Now" : "Wish"}</span>
               </button>
 
               <button
                 className="btn btn-secondary btn-sm"
                 onClick={() => onViewChange?.("stats")}
-                disabled={isWishlist}
                 title="Taste Stats"
               >
                 {Icons.chart}
@@ -556,20 +512,14 @@ function Header({
               <div className="dropdown-menu">
                 <button
                   className="dropdown-item"
-                  onClick={() => {
-                    onViewChange?.("home");
-                    setMenuOpen(false);
-                  }}
+                  onClick={() => { onViewChange?.("home"); setMenuOpen(false); }}
                 >
                   {Icons.home}
                   <span>Home</span>
                 </button>
                 <button
                   className="dropdown-item"
-                  onClick={() => {
-                    onViewChange?.("stats");
-                    setMenuOpen(false);
-                  }}
+                  onClick={() => { onViewChange?.("stats"); setMenuOpen(false); }}
                 >
                   {Icons.chart}
                   <span>Stats</span>
@@ -584,13 +534,11 @@ function Header({
                   {Icons.home}
                   <span>Indigo's Site</span>
                 </a>
-                {!isWishlist && (
+                {mode !== "wishlist" && (
                   <button
                     className="dropdown-item"
                     onClick={() => {
                       setMenuOpen(false);
-                      // Find the main Content component and open import modal
-                      // We'll use a custom event to trigger import modal in Content
                       window.dispatchEvent(new CustomEvent("openImportModal"));
                     }}
                   >
@@ -601,10 +549,7 @@ function Header({
                 <div className="dropdown-divider" />
                 <button
                   className="dropdown-item"
-                  onClick={() => {
-                    void signOut();
-                    setMenuOpen(false);
-                  }}
+                  onClick={() => { void signOut(); setMenuOpen(false); }}
                 >
                   {Icons.signOut}
                   <span>Sign Out</span>
@@ -615,9 +560,8 @@ function Header({
         </div>
       )}
 
-      {/* Mobile Search Bar (Overlay/Expansion) */}
       {mobileSearchOpen && currentView === "home" && (
-        <div className="absolute top-full left-0 right-0 p-2 bg-[var(--color-card)] border-b border-black/5 shadow-md md:hidden z-10 animate-in slide-in-from-top-2">
+        <div className="absolute top-full left-0 right-0 p-2 bg-[var(--color-card-dark)] border-b border-white/10 shadow-md md:hidden z-10 animate-in">
           <div className="relative">
             <input
               autoFocus
@@ -671,7 +615,7 @@ function SignInForm() {
           const formData = new FormData(e.target as HTMLFormElement);
           formData.set("flow", flow);
           void signIn("password", formData)
-            .catch((error) => setError(error.message))
+            .catch((error: Error) => setError(error.message))
             .finally(() => setLoading(false));
         }}
       >
@@ -693,7 +637,7 @@ function SignInForm() {
           </button>
         </div>
         {error && (
-          <div className="text-sm text-red-600 bg-red-50 p-2 rounded">{error}</div>
+          <div className="text-sm text-red-400 bg-red-900/30 p-2 rounded">{error}</div>
         )}
       </form>
     </div>
@@ -706,109 +650,110 @@ function Content({
   cachedData,
   onEntriesUpdate
 }: {
-  mode: "library" | "wishlist";
+  mode: AppMode;
   searchQuery?: string;
   onSearchChange: (q: string) => void;
-  cachedData: { entries: MediaEntry[], filter?: string } | null;
+  cachedData: { data: MediaEntry[]; filter?: string } | null;
   onEntriesUpdate: (entries: MediaEntry[], filter?: string) => void;
 }) {
+  const isLibrary = mode === "library";
+  const isCurrently = mode === "currently";
   const isWishlist = mode === "wishlist";
+
   const [showAddForm, setShowAddForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [editingEntry, setEditingEntry] = useState<MediaEntry | null>(null);
   const [editingWishlist, setEditingWishlist] = useState<WishlistItem | null>(null);
+  const [editingCurrently, setEditingCurrently] = useState<CurrentlyItem | null>(null);
+  const [completingItem, setCompletingItem] = useState<CurrentlyItem | null>(null);
   const [typeFilter, setTypeFilter] = useState<MediaType | "all">("all");
   const [librarySortOption, setLibrarySortOption] = useState<LibrarySortOption>("rating");
   const [wishlistSortOption, setWishlistSortOption] = useState<WishlistSortOption>("dateNewest");
+  const [currentlySortOption, setCurrentlySortOption] = useState<CurrentlySortOption>("dateNewest");
   const [headWeight, setHeadWeight] = useState(50);
-  const [cachedWishlistData, setCachedWishlistData] = useState<{ items: WishlistItem[], filter?: string } | null>(() => getCachedWishlistItems());
+  const [cachedWishlistData, setCachedWishlistData] = useState<{ data: WishlistItem[]; filter?: string } | null>(() => getCachedWishlistItems());
+  const [cachedCurrentlyData, setCachedCurrentlyData] = useState<{ data: CurrentlyItem[]; filter?: string } | null>(() => getCachedCurrentlyItems());
 
-  const entries = useQuery(api.mediaEntries.getMediaEntries, {
-    typeFilter: typeFilter === "all" ? undefined : typeFilter,
-  });
+  const tf = typeFilter === "all" ? undefined : typeFilter;
 
-  const wishlistItems = useQuery(api.wishlist.getWishlistItems, {
-    typeFilter: typeFilter === "all" ? undefined : typeFilter,
-  });
+  const entries = useQuery(api.mediaEntries.getMediaEntries, { typeFilter: tf });
+  const wishlistItems = useQuery(api.wishlist.getWishlistItems, { typeFilter: tf });
+  const currentlyItemsQuery = useQuery(api.currently.getCurrentlyItems, { typeFilter: tf });
 
-  // Update cache when entries change
   useEffect(() => {
     if (entries) {
-      const typedEntries = entries as MediaEntry[];
+      const typed = entries as MediaEntry[];
       const filter = typeFilter === "all" ? undefined : typeFilter;
-      setCachedEntries(typedEntries, filter);
-      onEntriesUpdate(typedEntries, filter);
+      setCachedEntries(typed, filter);
+      onEntriesUpdate(typed, filter);
     }
   }, [entries, onEntriesUpdate, typeFilter]);
 
-  // Close modals when switching modes
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setShowAddForm(false);
     setShowImport(false);
     setEditingEntry(null);
     setEditingWishlist(null);
+    setEditingCurrently(null);
+    setCompletingItem(null);
   }, [mode]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
-  // Open import modal when custom event is dispatched
   useEffect(() => {
     const handler = () => {
-      if (!isWishlist) {
-        setShowImport(true);
-      }
+      if (!isWishlist) setShowImport(true);
     };
     window.addEventListener("openImportModal", handler as EventListener);
     return () => window.removeEventListener("openImportModal", handler as EventListener);
   }, [isWishlist]);
 
-  // Update wishlist cache when items change
   useEffect(() => {
     if (wishlistItems) {
       const typed = wishlistItems as WishlistItem[];
       const filter = typeFilter === "all" ? undefined : typeFilter;
       setCachedWishlistItems(typed, filter);
-      setCachedWishlistData({ items: typed, filter });
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing query data to cache state
+      setCachedWishlistData({ data: typed, filter });
     }
   }, [wishlistItems, typeFilter]);
 
-  // Ensure library sort stays valid when switching
   useEffect(() => {
-    if (isWishlist && librarySortOption === "rating") {
-      setLibrarySortOption("dateNewest");
+    if (currentlyItemsQuery) {
+      const typed = currentlyItemsQuery as CurrentlyItem[];
+      const filter = typeFilter === "all" ? undefined : typeFilter;
+      setCachedCurrentlyItems(typed, filter);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing query data to cache state
+      setCachedCurrentlyData({ data: typed, filter });
     }
-  }, [isWishlist, librarySortOption]);
+  }, [currentlyItemsQuery, typeFilter]);
 
   const currentFilter = typeFilter === "all" ? undefined : typeFilter;
-  const libraryDisplayEntries = entries || (cachedData && cachedData.filter === currentFilter ? cachedData.entries : null);
-  const wishlistDisplayItems = wishlistItems || (cachedWishlistData && cachedWishlistData.filter === currentFilter ? cachedWishlistData.items : null);
+  const libraryDisplayEntries = entries ?? (cachedData && cachedData.filter === currentFilter ? cachedData.data : null);
+  const wishlistDisplayItems = wishlistItems ?? (cachedWishlistData && cachedWishlistData.filter === currentFilter ? cachedWishlistData.data : null);
+  const currentlyDisplayItems = currentlyItemsQuery ?? (cachedCurrentlyData && cachedCurrentlyData.filter === currentFilter ? cachedCurrentlyData.data : null);
 
   const sortedLibraryEntries = useMemo(() => {
     if (!libraryDisplayEntries) return [];
     let processed = [...libraryDisplayEntries];
-
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       processed = processed.filter(e => {
         const typeInfo = MEDIA_TYPES.find(t => t.value === e.type);
-        return (
-          e.title.toLowerCase().includes(q) ||
-          e.notes?.toLowerCase().includes(q) ||
-          typeInfo?.label.toLowerCase().includes(q)
-        );
+        return e.title.toLowerCase().includes(q) || e.notes?.toLowerCase().includes(q) || typeInfo?.label.toLowerCase().includes(q);
       });
     }
-
     switch (librarySortOption) {
       case "dateNewest": processed.sort((a, b) => b.dateWatched - a.dateWatched); break;
       case "dateOldest": processed.sort((a, b) => a.dateWatched - b.dateWatched); break;
       case "alphaAZ": processed.sort((a, b) => a.title.localeCompare(b.title)); break;
       case "alphaZA": processed.sort((a, b) => b.title.localeCompare(a.title)); break;
-      case "rating":
-        processed.sort((a, b) => {
-          const hW = headWeight / 100;
-          const hrW = 1 - hW;
-          return (b.headRating * hW + b.heartRating * hrW) - (a.headRating * hW + a.heartRating * hrW);
-        });
+      case "rating": {
+        const hW = headWeight / 100;
+        const hrW = 1 - hW;
+        processed.sort((a, b) => (b.headRating * hW + b.heartRating * hrW) - (a.headRating * hW + a.heartRating * hrW));
         break;
+      }
     }
     return processed;
   }, [libraryDisplayEntries, librarySortOption, headWeight, searchQuery]);
@@ -816,19 +761,13 @@ function Content({
   const sortedWishlistItems = useMemo(() => {
     const source = wishlistDisplayItems ?? [];
     let processed = [...source];
-
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       processed = processed.filter(e => {
         const typeInfo = MEDIA_TYPES.find(t => t.value === e.type);
-        return (
-          e.title.toLowerCase().includes(q) ||
-          e.notes?.toLowerCase().includes(q) ||
-          typeInfo?.label.toLowerCase().includes(q)
-        );
+        return e.title.toLowerCase().includes(q) || e.notes?.toLowerCase().includes(q) || typeInfo?.label.toLowerCase().includes(q);
       });
     }
-
     switch (wishlistSortOption) {
       case "dateNewest": processed.sort((a, b) => b.dateAdded - a.dateAdded); break;
       case "dateOldest": processed.sort((a, b) => a.dateAdded - b.dateAdded); break;
@@ -838,42 +777,63 @@ function Content({
     return processed;
   }, [wishlistDisplayItems, wishlistSortOption, searchQuery]);
 
-  const sortOption = isWishlist ? wishlistSortOption : librarySortOption;
-  const isLoading = isWishlist
+  const sortedCurrentlyItems = useMemo(() => {
+    const source = currentlyDisplayItems ?? [];
+    let processed = [...source];
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      processed = processed.filter(e => {
+        const typeInfo = MEDIA_TYPES.find(t => t.value === e.type);
+        return e.title.toLowerCase().includes(q) || e.notes?.toLowerCase().includes(q) || typeInfo?.label.toLowerCase().includes(q);
+      });
+    }
+    switch (currentlySortOption) {
+      case "dateNewest": processed.sort((a, b) => b.dateStarted - a.dateStarted); break;
+      case "dateOldest": processed.sort((a, b) => a.dateStarted - b.dateStarted); break;
+      case "alphaAZ": processed.sort((a, b) => a.title.localeCompare(b.title)); break;
+      case "alphaZA": processed.sort((a, b) => b.title.localeCompare(a.title)); break;
+    }
+    return processed;
+  }, [currentlyDisplayItems, currentlySortOption, searchQuery]);
+
+  const sortOption = isLibrary ? librarySortOption : isWishlist ? wishlistSortOption : currentlySortOption;
+
+  const isLoading = isLibrary
+    ? entries === undefined && !libraryDisplayEntries
+    : isWishlist
     ? wishlistItems === undefined && !wishlistDisplayItems
-    : entries === undefined && !libraryDisplayEntries;
+    : currentlyItemsQuery === undefined && !currentlyDisplayItems;
+
+  const displayCount = isLibrary ? sortedLibraryEntries.length : isWishlist ? sortedWishlistItems.length : sortedCurrentlyItems.length;
 
   return (
     <div className="flex flex-col gap-4">
       <div className="control-bar card">
         <div className="control-row control-row-top">
-
           <div className="actions-stack">
             <button className="btn btn-primary btn-lg" onClick={() => setShowAddForm(true)}>
               {Icons.plus}
-              <span>{isWishlist ? "Add to Wishlist" : "Add"}</span>
+              <span>{isLibrary ? "Add" : isCurrently ? "Add Current" : "Add to Wishlist"}</span>
             </button>
             <div className="control-row sort-row">
               <select
                 className="select"
                 value={sortOption}
                 onChange={(e) => {
-                  const val = e.target.value as LibrarySortOption & WishlistSortOption;
-                  if (isWishlist) {
-                    setWishlistSortOption(val as WishlistSortOption);
-                  } else {
-                    setLibrarySortOption(val as LibrarySortOption);
-                  }
+                  const val = e.target.value;
+                  if (isLibrary) setLibrarySortOption(val as LibrarySortOption);
+                  else if (isWishlist) setWishlistSortOption(val as WishlistSortOption);
+                  else setCurrentlySortOption(val as CurrentlySortOption);
                 }}
               >
                 <option value="dateNewest">Newest</option>
                 <option value="dateOldest">Oldest</option>
                 <option value="alphaAZ">A-Z</option>
                 <option value="alphaZA">Z-A</option>
-                {!isWishlist && <option value="rating">Rating</option>}
+                {isLibrary && <option value="rating">Rating</option>}
               </select>
 
-              {!isWishlist && sortOption === "rating" && (
+              {isLibrary && librarySortOption === "rating" && (
                 <div className="weight-slider">
                   <span style={{ color: 'var(--color-secondary)' }}>Head {headWeight}%</span>
                   <input
@@ -911,19 +871,18 @@ function Content({
             ))}
           </div>
         </div>
-
-
       </div>
 
-      {showAddForm && !isWishlist && <EntryModal onClose={() => setShowAddForm(false)} />}
+      {showAddForm && isLibrary && <EntryModal onClose={() => setShowAddForm(false)} />}
+      {showAddForm && isCurrently && <CurrentlyModal onClose={() => setShowAddForm(false)} />}
       {showAddForm && isWishlist && <WishlistModal onClose={() => setShowAddForm(false)} />}
       {showImport && !isWishlist && <ImportModal existingEntries={entries || []} onClose={() => setShowImport(false)} />}
-      {editingEntry && !isWishlist && <EntryModal entry={editingEntry} onClose={() => setEditingEntry(null)} />}
+      {editingEntry && isLibrary && <EntryModal entry={editingEntry} onClose={() => setEditingEntry(null)} />}
       {editingWishlist && isWishlist && <WishlistModal item={editingWishlist} onClose={() => setEditingWishlist(null)} />}
+      {editingCurrently && isCurrently && <CurrentlyModal item={editingCurrently} onClose={() => setEditingCurrently(null)} />}
+      {completingItem && <CompleteModal item={completingItem} onClose={() => setCompletingItem(null)} />}
 
-      {isLoading ? (
-        <LoadingSkeleton />
-      ) : (isWishlist ? sortedWishlistItems.length === 0 : sortedLibraryEntries.length === 0) ? (
+      {!isLoading && displayCount === 0 ? (
         <div className="empty-state">
           {searchQuery ? (
             <>
@@ -934,29 +893,139 @@ function Content({
           ) : (
             <>
               {Icons.empty}
-              <p>{isWishlist ? "No wishlist items yet" : "No entries yet"}</p>
+              <p>{isLibrary ? "No entries yet" : isCurrently ? "Nothing in progress" : "No wishlist items yet"}</p>
               <p className="text-sm opacity-60">Add your first one</p>
             </>
           )}
         </div>
+      ) : isLoading ? (
+        <LoadingSkeleton />
       ) : (
         <div className="entries-grid">
-          {isWishlist
-            ? sortedWishlistItems.map((item) => (
-              <WishlistCard
-                key={item._id}
-                item={item}
-                onEdit={() => setEditingWishlist(item)}
-              />
-            ))
-            : sortedLibraryEntries.map((entry) => (
-              <MediaEntryCard
-                key={entry._id}
-                entry={entry}
-                headWeight={sortOption === "rating" ? headWeight : 50}
-                onEdit={() => setEditingEntry(entry)}
-              />
-            ))}
+          {isLibrary && sortedLibraryEntries.map((entry, i) => (
+            <MediaEntryCard
+              key={entry._id}
+              entry={entry}
+              headWeight={librarySortOption === "rating" ? headWeight : 50}
+              onEdit={() => setEditingEntry(entry)}
+              index={i}
+            />
+          ))}
+          {isWishlist && sortedWishlistItems.map((item, i) => (
+            <WishlistCard
+              key={item._id}
+              item={item}
+              onEdit={() => setEditingWishlist(item)}
+              index={i}
+            />
+          ))}
+          {isCurrently && sortedCurrentlyItems.map((item, i) => (
+            <CurrentlyCard
+              key={item._id}
+              item={item}
+              onEdit={() => setEditingCurrently(item)}
+              onComplete={() => setCompletingItem(item)}
+              index={i}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MediaSearchAutocomplete({
+  type,
+  value,
+  onChange,
+}: {
+  type: MediaType;
+  value: string;
+  onChange: (title: string) => void;
+}) {
+  const searchMedia = useAction(api.lookup.searchMedia);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<{ title: string; year?: string; poster?: string }[]>([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const doSearch = useCallback((q: string) => {
+    if (q.length < 2) { setResults([]); setOpen(false); setSearched(false); return; }
+    setLoading(true);
+    setSearched(false);
+    searchMedia({ query: q, type })
+      .then((r) => { setResults(r); setSearched(true); setOpen(r.length > 0); })
+      .catch(() => { setResults([]); setSearched(true); setOpen(false); })
+      .finally(() => setLoading(false));
+  }, [searchMedia, type]);
+
+  const handleInputChange = (q: string) => {
+    setQuery(q);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => doSearch(q), 400);
+  };
+
+  const sourceLabel = type === "movie" || type === "tvshow" ? "TMDB" : type === "book" ? "OpenLibrary" : null;
+
+  return (
+    <div className="autocomplete-wrapper" ref={wrapperRef}>
+      <input
+        className="input w-full"
+        type="text"
+        value={value || query}
+        onChange={(e) => {
+          if (value && value === query) {
+            setQuery("");
+            onChange("");
+            handleInputChange(e.target.value);
+          } else {
+            handleInputChange(e.target.value);
+            onChange(e.target.value);
+          }
+        }}
+        placeholder={sourceLabel ? `Search ${sourceLabel}...` : "Search..."}
+      />
+      {loading && <div className="text-xs opacity-50 mt-1">Searching...</div>}
+      {searched && !loading && results.length === 0 && query.length >= 2 && (
+        <div className="text-xs opacity-50 mt-1">No results found</div>
+      )}
+      {open && results.length > 0 && (
+        <div className="autocomplete-dropdown">
+          {results.map((r, i) => (
+            <div
+              key={i}
+              className="autocomplete-item"
+              onClick={() => {
+                onChange(r.title);
+                setQuery(r.title);
+                setOpen(false);
+                setSearched(false);
+              }}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                {r.poster && (
+                  <img src={r.poster} alt="" className="w-8 h-12 rounded object-cover shrink-0 bg-white/5" />
+                )}
+                <div className="min-w-0">
+                  <div className="truncate">{r.title}</div>
+                  {r.year && <div className="text-xs opacity-50">{r.year}</div>}
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -977,92 +1046,83 @@ function EntryModal({ entry, onClose }: { entry?: MediaEntry; onClose: () => voi
   const [notes, setNotes] = useState(entry?.notes ?? "");
   const [loading, setLoading] = useState(false);
 
-
-
   const isEditing = !!entry;
+  const titleRef = useRef(title);
+  const typeRef = useRef(type);
+  const dateWatchedRef = useRef(dateWatched);
+  const notesRef = useRef(notes);
+  const headRatingRef = useRef(headRating);
+  const heartRatingRef = useRef(heartRating);
+  const loadingRef = useRef(loading);
+  const isEditingRef = useRef(isEditing);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim()) return;
+  useEffect(() => { titleRef.current = title; }, [title]);
+  useEffect(() => { typeRef.current = type; }, [type]);
+  useEffect(() => { dateWatchedRef.current = dateWatched; }, [dateWatched]);
+  useEffect(() => { notesRef.current = notes; }, [notes]);
+  useEffect(() => { headRatingRef.current = headRating; }, [headRating]);
+  useEffect(() => { heartRatingRef.current = heartRating; }, [heartRating]);
+  useEffect(() => { loadingRef.current = loading; }, [loading]);
+  useEffect(() => { isEditingRef.current = isEditing; }, [isEditing]);
+
+  const handleSubmit = useCallback(async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const t = titleRef.current.trim();
+    if (!t || loadingRef.current) return;
     setLoading(true);
     try {
-      if (isEditing) {
+      if (isEditingRef.current && entry) {
         await updateEntry({
           id: entry._id,
-          title: title.trim(),
-          type,
-          headRating,
-          heartRating,
-          dateWatched: new Date(dateWatched).getTime(),
-          notes: notes.trim() || undefined,
+          title: t,
+          type: typeRef.current,
+          headRating: headRatingRef.current,
+          heartRating: heartRatingRef.current,
+          dateWatched: new Date(dateWatchedRef.current).getTime(),
+          notes: notesRef.current.trim() || undefined,
         });
       } else {
         await addEntry({
-          title: title.trim(),
-          type,
-          headRating,
-          heartRating,
-          dateWatched: new Date(dateWatched).getTime(),
-          notes: notes.trim() || undefined,
+          title: t,
+          type: typeRef.current,
+          headRating: headRatingRef.current,
+          heartRating: heartRatingRef.current,
+          dateWatched: new Date(dateWatchedRef.current).getTime(),
+          notes: notesRef.current.trim() || undefined,
         });
       }
-      invalidateCache(); // Invalidate cache after mutation
+      invalidateCache();
       onClose();
     } catch (error) {
       console.error("Failed to save:", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [entry, addEntry, updateEntry, onClose]);
 
-  // Keyboard navigation & Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const tagName = (document.activeElement as HTMLElement).tagName;
-
-      // Enter key for submit (unless in notes textarea)
-      if (e.key === 'Enter' && !e.shiftKey) {
-        if (tagName === 'TEXTAREA') return; // Allow newlines in notes
-        // If in Title input, native form submit handles it.
-        // If focusing nothing (on grid), we want to submit.
-        // We only trigger if NOT on a button (buttons handle themselves)
-        if (tagName !== 'BUTTON') {
-          e.preventDefault();
-          // We pass a dummy event because handleSubmit expects one
-          handleSubmit({ preventDefault: () => { } } as React.FormEvent);
-        }
+      if (e.key === 'Enter' && !e.shiftKey && tagName !== 'TEXTAREA' && tagName !== 'BUTTON') {
+        e.preventDefault();
+        void handleSubmit();
         return;
       }
-
-      // Arrow keys (only if no input focused)
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tagName)) return;
-
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setHeadRating(h => Math.min(5, h + 1));
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setHeadRating(h => Math.max(1, h - 1));
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        setHeartRating(h => Math.max(1, h - 1));
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        setHeartRating(h => Math.min(5, h + 1));
-      }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setHeadRating(h => Math.min(5, h + 1)); }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); setHeadRating(h => Math.max(1, h - 1)); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); setHeartRating(h => Math.max(1, h - 1)); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); setHeartRating(h => Math.min(5, h + 1)); }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [headRating, heartRating, title, type, dateWatched, notes, isEditing, loading]);
-  // Added deps because handleSubmit uses them. 
-  // Since handleSubmit is re-created every render, this effect re-runs every render.
-  // This is acceptable for a modal.
+  }, [handleSubmit]);
 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-xl mb-4 text-center">{isEditing ? "Edit Entry" : "Add Entry"}</h2>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <form onSubmit={(e) => { void handleSubmit(e); }} className="flex flex-col gap-3">
           <input
             className="input w-full"
             type="text"
@@ -1084,14 +1144,17 @@ function EntryModal({ entry, onClose }: { entry?: MediaEntry; onClose: () => voi
               onChange={(e) => setDateWatched(e.target.value)}
             />
           </div>
-
+          <MediaSearchAutocomplete
+            type={type}
+            value={title}
+            onChange={setTitle}
+          />
           <RatingGrid
             headRating={headRating}
             heartRating={heartRating}
             type={type}
             onSelect={(head, heart) => { setHeadRating(head); setHeartRating(heart); }}
           />
-
           <textarea
             className="input w-full resize-none"
             rows={2}
@@ -1099,7 +1162,6 @@ function EntryModal({ entry, onClose }: { entry?: MediaEntry; onClose: () => voi
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Review (optional)"
           />
-
           <div className="flex gap-2 justify-end">
             <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
             <button type="submit" className="btn btn-primary btn-sm" disabled={loading || !title.trim()}>
@@ -1131,13 +1193,7 @@ function WishlistModal({ item, onClose }: { item?: WishlistItem; onClose: () => 
     if (!title.trim()) return;
     setLoading(true);
     try {
-      const payload = {
-        title: title.trim(),
-        type,
-        dateAdded: new Date(dateAdded).getTime(),
-        notes: notes.trim() || undefined,
-      };
-
+      const payload = { title: title.trim(), type, dateAdded: new Date(dateAdded).getTime(), notes: notes.trim() || undefined };
       if (isEditing) {
         await updateItem({ id: item._id, ...payload });
       } else {
@@ -1156,7 +1212,7 @@ function WishlistModal({ item, onClose }: { item?: WishlistItem; onClose: () => 
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-xl mb-4 text-center">{isEditing ? "Edit Wishlist Item" : "Add to Wishlist"}</h2>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <form onSubmit={(e) => { void handleSubmit(e); }} className="flex flex-col gap-3">
           <input
             className="input w-full"
             type="text"
@@ -1178,7 +1234,7 @@ function WishlistModal({ item, onClose }: { item?: WishlistItem; onClose: () => 
               onChange={(e) => setDateAdded(e.target.value)}
             />
           </div>
-
+          <MediaSearchAutocomplete type={type} value={title} onChange={setTitle} />
           <textarea
             className="input w-full resize-none"
             rows={3}
@@ -1186,7 +1242,6 @@ function WishlistModal({ item, onClose }: { item?: WishlistItem; onClose: () => 
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Notes (optional)"
           />
-
           <div className="flex gap-2 justify-end">
             <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
             <button type="submit" className="btn btn-primary btn-sm" disabled={loading || !title.trim()}>
@@ -1194,6 +1249,166 @@ function WishlistModal({ item, onClose }: { item?: WishlistItem; onClose: () => 
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function CurrentlyModal({ item, onClose }: { item?: CurrentlyItem; onClose: () => void }) {
+  const addItem = useMutation(api.currently.addCurrentlyItem);
+  const updateItem = useMutation(api.currently.updateCurrentlyItem);
+
+  const [title, setTitle] = useState(item?.title ?? "");
+  const [type, setType] = useState<MediaType>(item?.type ?? "movie");
+  const [dateStarted, setDateStarted] = useState(
+    item ? new Date(item.dateStarted).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]
+  );
+  const [progress, setProgress] = useState(item?.progress ?? 0);
+  const [notes, setNotes] = useState(item?.notes ?? "");
+  const [loading, setLoading] = useState(false);
+
+  const isEditing = !!item;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) return;
+    setLoading(true);
+    try {
+      const payload = { title: title.trim(), type, dateStarted: new Date(dateStarted).getTime(), progress, notes: notes.trim() || undefined };
+      if (isEditing) {
+        await updateItem({ id: item._id, ...payload });
+      } else {
+        await addItem(payload);
+      }
+      invalidateCurrentlyCache();
+      onClose();
+    } catch (error) {
+      console.error("Failed to save:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-xl mb-4 text-center">{isEditing ? "Edit Current Item" : "Add Current Item"}</h2>
+        <form onSubmit={(e) => { void handleSubmit(e); }} className="flex flex-col gap-3">
+          <input
+            className="input w-full"
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Title"
+            required
+          />
+          <div className="flex gap-2">
+            <select className="select flex-1" value={type} onChange={(e) => setType(e.target.value as MediaType)}>
+              {MEDIA_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+            <input
+              className="input flex-1"
+              type="date"
+              value={dateStarted}
+              onChange={(e) => setDateStarted(e.target.value)}
+            />
+          </div>
+          <MediaSearchAutocomplete type={type} value={title} onChange={setTitle} />
+          <div>
+            <div className="flex justify-between items-center mb-1">
+              <label className="text-sm opacity-70">Progress</label>
+              <span className="text-sm font-bold">{progress}%</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={progress}
+              onChange={(e) => setProgress(Number(e.target.value))}
+              className="slider w-full"
+            />
+          </div>
+          <textarea
+            className="input w-full resize-none"
+            rows={2}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Notes (optional)"
+          />
+          <div className="flex gap-2 justify-end">
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn btn-primary btn-sm" disabled={loading || !title.trim()}>
+              {loading ? "..." : isEditing ? "Save" : "Add"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function CompleteModal({ item, onClose }: { item: CurrentlyItem; onClose: () => void }) {
+  const completeCurrently = useMutation(api.currently.completeCurrently);
+  const [headRating, setHeadRating] = useState(3);
+  const [heartRating, setHeartRating] = useState(3);
+  const [dateWatched, setDateWatched] = useState(new Date().toISOString().split("T")[0]);
+  const [notes, setNotes] = useState(item.notes ?? "");
+  const [loading, setLoading] = useState(false);
+
+  const handleComplete = async () => {
+    setLoading(true);
+    try {
+      await completeCurrently({
+        currentlyItemId: item._id,
+        headRating,
+        heartRating,
+        dateWatched: new Date(dateWatched).getTime(),
+        notes: notes.trim() || undefined,
+      });
+      invalidateCache();
+      invalidateCurrentlyCache();
+      onClose();
+    } catch (error) {
+      console.error("Failed to complete:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-xl mb-4 text-center">Complete & Rate</h2>
+        <p className="text-center text-sm opacity-70 mb-3">{item.title}</p>
+        <div className="flex flex-col gap-3">
+          <RatingGrid
+            headRating={headRating}
+            heartRating={heartRating}
+            type={item.type}
+            onSelect={(head, heart) => { setHeadRating(head); setHeartRating(heart); }}
+          />
+          <input
+            className="input w-full"
+            type="date"
+            value={dateWatched}
+            onChange={(e) => setDateWatched(e.target.value)}
+          />
+          <textarea
+            className="input w-full resize-none"
+            rows={2}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Review (optional)"
+          />
+          <div className="flex gap-2 justify-end">
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
+            <button className="btn btn-accent btn-sm" onClick={() => { void handleComplete(); }} disabled={loading}>
+              {loading ? "..." : "Complete"}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -1220,7 +1435,6 @@ function RatingGrid({
       const heart = col + 1;
       const head = 5 - row;
       const isSelected = head === headRating && heart === heartRating;
-
       cells.push(
         <div
           key={`${head}-${heart}`}
@@ -1243,8 +1457,7 @@ function RatingGrid({
         <div className="rating-corner br">{RATING_LABELS.br}</div>
         <div className="rating-grid">{cells}</div>
       </div>
-
-      <div className="rating-display flex flex-col gap-1 text-center text-md ">
+      <div className="rating-display flex flex-col gap-1 text-center text-md">
         <div className="font-bold opacity-75">Head {headRating}/5 · Heart {heartRating}/5</div>
         <div className="text-md">
           {descriptions.head[headRating as keyof typeof descriptions.head]}
@@ -1252,7 +1465,7 @@ function RatingGrid({
           {descriptions.heart[heartRating as keyof typeof descriptions.heart]}
         </div>
       </div>
-    </div >
+    </div>
   );
 }
 
@@ -1263,32 +1476,47 @@ function getRatingColor(score: number) {
 function WishlistCard({
   item,
   onEdit,
+  index,
 }: {
   item: WishlistItem;
   onEdit: () => void;
+  index: number;
 }) {
   const deleteItem = useMutation(api.wishlist.deleteWishlistItem);
+  const promoteToCurrently = useMutation(api.currently.promoteToCurrently);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [promoting, setPromoting] = useState(false);
 
-  const typeInfo = MEDIA_TYPES.find((t) => t.value.toUpperCase() === item.type.toUpperCase());
+  const typeInfo = MEDIA_TYPES.find((t) => t.value === item.type);
   const formattedDate = new Date(item.dateAdded).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
+    month: "short", day: "numeric", year: "numeric",
   });
 
+  const handleStart = async () => {
+    setPromoting(true);
+    try {
+      await promoteToCurrently({ wishlistItemId: item._id });
+      invalidateWishlistCache();
+      invalidateCurrentlyCache();
+    } catch (error) {
+      console.error("Failed to start:", error);
+    } finally {
+      setPromoting(false);
+    }
+  };
+
   return (
-    <div className="w-full card entry-card relative group p-0 overflow-hidden flex flex-col">
+    <div className="card entry-card relative group p-0 overflow-hidden flex flex-col card-in" style={{ animationDelay: `${index * 40}ms` }}>
       <div className={`entry-banner type-${item.type}`}>
         <div className="entry-banner-fill w-full bg-[var(--color-primary)]" />
         <div className="entry-banner-content">
           <div className="flex items-center gap-2">
-            <span>{typeInfo?.icon} </span>
-            <span className="font-bold uppercase tracking-wider text-sm ">{typeInfo?.label}</span>
+            <span>{typeInfo?.icon}</span>
+            <span className="font-bold uppercase tracking-wider text-sm">{typeInfo?.label}</span>
           </div>
           <div className="flex items-center gap-3 text-xs opacity-80 whitespace-nowrap">
             <span className="px-2 py-1 rounded-full bg-black/20 text-white">Wishlist</span>
-            <span className="">Added {formattedDate}</span>
+            <span>Added {formattedDate}</span>
           </div>
         </div>
       </div>
@@ -1297,13 +1525,16 @@ function WishlistCard({
         <div className="flex justify-between items-start gap-2">
           <div className="entry-title mb-0">{item.title}</div>
           <div className="entry-actions shrink-0">
-            <button onClick={onEdit} title="Edit">{Icons.edit}</button>
-            <button onClick={() => setShowConfirm(true)} title="Delete">{Icons.trash}</button>
+            <button onClick={(e) => { e.stopPropagation(); onEdit(); }} title="Edit">{Icons.edit}</button>
+            <button onClick={(e) => { e.stopPropagation(); setShowConfirm(true); }} title="Delete">{Icons.trash}</button>
           </div>
         </div>
-
         {item.notes && <p className="entry-notes mt-0 mb-0">"{item.notes}"</p>}
-
+        <div className="flex gap-2 mt-auto pt-2">
+          <button className="btn btn-accent btn-sm flex-1" onClick={() => { void handleStart(); }} disabled={promoting}>
+            {Icons.play} {promoting ? "..." : "Start"}
+          </button>
+        </div>
       </div>
 
       {showConfirm && (
@@ -1312,7 +1543,7 @@ function WishlistCard({
           <div className="flex gap-2">
             <button className="btn btn-ghost btn-sm" onClick={() => setShowConfirm(false)}>No</button>
             <button className="btn btn-danger btn-sm" onClick={() => {
-              deleteItem({ id: item._id });
+              void deleteItem({ id: item._id });
               invalidateWishlistCache();
               setShowConfirm(false);
             }}>Yes</button>
@@ -1327,73 +1558,113 @@ function MediaEntryCard({
   entry,
   headWeight,
   onEdit,
+  index,
 }: {
   entry: MediaEntry;
   headWeight: number;
   onEdit: () => void;
+  index: number;
 }) {
   const deleteEntry = useMutation(api.mediaEntries.deleteMediaEntry);
+  const getGlobalRating = useAction(api.lookup.getGlobalRating);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [globalRating, setGlobalRating] = useState<{ rating: number | null; votes: number | null; source: string } | null>(null);
 
-  const typeInfo = MEDIA_TYPES.find((t) => t.value.toUpperCase() === entry.type.toUpperCase());
+  const typeInfo = MEDIA_TYPES.find((t) => t.value === entry.type);
   const formattedDate = new Date(entry.dateWatched).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
+    month: "short", day: "numeric", year: "numeric",
   });
 
-  // Calculate weighted bar widths
   const headW = headWeight / 100;
   const heartW = 1 - headW;
   const totalScore = entry.headRating * headW + entry.heartRating * heartW;
-  const maxScore = 5;
-  const scorePercent = Math.min(100, Math.max(0, (totalScore / maxScore) * 100));
+  const scorePercent = Math.min(100, Math.max(0, (totalScore / 5) * 100));
   const bannerColor = getRatingColor(totalScore);
 
+  const handleExpand = () => {
+    const next = !expanded;
+    setExpanded(next);
+    if (next && !globalRating && (entry.type === "movie" || entry.type === "tvshow" || entry.type === "book")) {
+      getGlobalRating({ title: entry.title, type: entry.type })
+        .then((r) => setGlobalRating({ rating: r.globalRating, votes: r.globalVotes, source: r.source }))
+        .catch(() => setGlobalRating(null));
+    }
+  };
+
+  const yourAvg = ((entry.headRating + entry.heartRating) / 2);
+  const globalMatched = globalRating?.rating != null;
+  const deltaGlobal = globalMatched ? (yourAvg - globalRating.rating!) : null;
+  const gr = globalRating;
+
   return (
-    <div className="card entry-card relative group p-0 overflow-hidden flex flex-col">
-      {/* Banner / Header */}
+    <div className={`card entry-card relative group p-0 overflow-hidden flex flex-col card-in ${expanded ? "card-expanded" : ""}`} style={{ animationDelay: `${index * 40}ms` }} onClick={handleExpand}>
       <div className={`entry-banner type-${entry.type}`}>
         <div className="entry-banner-fill" style={{ width: `${scorePercent}%`, background: bannerColor }} />
         <div className="entry-banner-content">
           <div className="flex items-center gap-2">
-            <span>{typeInfo?.icon} </span>
-            <span className="font-bold uppercase tracking-wider text-sm ">{typeInfo?.label}</span>
+            <span>{typeInfo?.icon}</span>
+            <span className="font-bold uppercase tracking-wider text-sm">{typeInfo?.label}</span>
           </div>
           <div className="flex items-center gap-3 text-xs opacity-80 whitespace-nowrap">
-
             <span className="opacity-75">Head {entry.headRating}</span>
             <span className="opacity-75">Heart {entry.heartRating}</span>
-
             <span>{formattedDate}</span>
-
-            <span className="rating-score-large text-white drop-shadow" aria-label={`Total ${totalScore.toFixed(1)}`}>
+            <span className="rating-score-large text-white drop-shadow">
               {totalScore.toFixed(1)}
             </span>
           </div>
         </div>
       </div>
 
-      {/* Content Body */}
       <div className="p-4 flex flex-col gap-1 flex-1">
         <div className="flex justify-between items-start gap-2">
           <div className="entry-title mb-0">{entry.title}</div>
-          <div className="entry-actions shrink-0">
+          <div className="entry-actions shrink-0" onClick={(e) => e.stopPropagation()}>
             <button onClick={onEdit} title="Edit">{Icons.edit}</button>
             <button onClick={() => setShowConfirm(true)} title="Delete">{Icons.trash}</button>
           </div>
-
         </div>
 
         {entry.notes && <p className="entry-notes mt-0 mb-0">"{entry.notes}"</p>}
+
+        <div className="expanded-detail">
+          <div className="mt-3 pt-3 border-t border-white/10 flex flex-col gap-2">
+            <div className="flex gap-4 text-sm opacity-70 flex-wrap">
+              <span>Watched: {formattedDate}</span>
+              <span>Head: {entry.headRating}/5</span>
+              <span>Heart: {entry.heartRating}/5</span>
+              <span>Score: {totalScore.toFixed(1)}/5</span>
+            </div>
+            {gr && gr.rating != null && (
+              <div className="flex items-center gap-2 text-sm bg-white/5 rounded-lg px-3 py-2">
+                <span className="opacity-60">{gr.source}:</span>
+                <span className="font-bold">{gr.rating}/5</span>
+                {gr.votes != null && (
+                  <span className="opacity-40 text-xs">({gr.votes.toLocaleString()} votes)</span>
+                )}
+                {deltaGlobal !== null && (
+                  <span className={`ml-auto text-xs px-2 py-0.5 rounded-full ${Math.abs(deltaGlobal) < 0.5 ? 'bg-yellow-500/20 text-yellow-300' : deltaGlobal > 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
+                    {deltaGlobal > 0 ? '+' : ''}{deltaGlobal.toFixed(1)} vs world
+                  </span>
+                )}
+              </div>
+            )}
+            {!globalMatched && expanded && (entry.type === "movie" || entry.type === "tvshow" || entry.type === "book") && (
+              <div className="text-xs opacity-30 italic">Comparing to {entry.type === "book" ? "OpenLibrary" : "TMDB"}...</div>
+            )}
+            {entry.notes && <p className="text-sm opacity-80 italic leading-relaxed">"{entry.notes}"</p>}
+          </div>
+        </div>
       </div>
 
       {showConfirm && (
-        <div className="confirm-overlay z-10">
+        <div className="confirm-overlay z-10" onClick={(e) => e.stopPropagation()}>
           <p className="text-sm">Delete?</p>
           <div className="flex gap-2">
             <button className="btn btn-ghost btn-sm" onClick={() => setShowConfirm(false)}>No</button>
             <button className="btn btn-danger btn-sm" onClick={() => {
-              deleteEntry({ id: entry._id });
+              void deleteEntry({ id: entry._id });
               invalidateCache();
             }}>Yes</button>
           </div>
@@ -1403,7 +1674,101 @@ function MediaEntryCard({
   );
 }
 
-// CSV parsing for favourites.me format
+function CurrentlyCard({
+  item,
+  onEdit,
+  onComplete,
+  index,
+}: {
+  item: CurrentlyItem;
+  onEdit: () => void;
+  onComplete: () => void;
+  index: number;
+}) {
+  const deleteItem = useMutation(api.currently.deleteCurrentlyItem);
+  const demoteCurrently = useMutation(api.currently.demoteCurrently);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [demoting, setDemoting] = useState(false);
+
+  const typeInfo = MEDIA_TYPES.find((t) => t.value === item.type);
+  const formattedDate = new Date(item.dateStarted).toLocaleDateString(undefined, {
+    month: "short", day: "numeric", year: "numeric",
+  });
+
+  const handleDemote = async () => {
+    setDemoting(true);
+    try {
+      await demoteCurrently({ currentlyItemId: item._id });
+      invalidateCurrentlyCache();
+      invalidateWishlistCache();
+    } catch (error) {
+      console.error("Failed to move back:", error);
+    } finally {
+      setDemoting(false);
+    }
+  };
+
+  return (
+    <div className="card entry-card relative group p-0 overflow-hidden flex flex-col card-in" style={{ animationDelay: `${index * 40}ms` }}>
+      <div className={`entry-banner type-${item.type}`}>
+        <div className="entry-banner-fill" style={{ width: `${item.progress}%`, background: 'var(--color-accent)' }} />
+        <div className="entry-banner-content">
+          <div className="flex items-center gap-2">
+            <span>{typeInfo?.icon}</span>
+            <span className="font-bold uppercase tracking-wider text-sm">{typeInfo?.label}</span>
+          </div>
+          <div className="flex items-center gap-3 text-xs opacity-80 whitespace-nowrap">
+            <span className="px-2 py-1 rounded-full bg-black/20 text-white">In Progress</span>
+            <span>Started {formattedDate}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-4 flex flex-col gap-2 flex-1">
+        <div className="flex justify-between items-start gap-2">
+          <div className="entry-title mb-0">{item.title}</div>
+          <div className="entry-actions shrink-0">
+            <button onClick={(e) => { e.stopPropagation(); onEdit(); }} title="Edit">{Icons.edit}</button>
+            <button onClick={(e) => { e.stopPropagation(); setShowConfirm(true); }} title="Delete">{Icons.trash}</button>
+          </div>
+        </div>
+
+        <div className="progress-bar">
+          <div className="progress-fill" style={{ width: `${item.progress}%` }} />
+        </div>
+        <div className="progress-label">
+          <span>{item.progress}% complete</span>
+          <span>{item.progress >= 100 ? "Done!" : ""}</span>
+        </div>
+
+        {item.notes && <p className="entry-notes mt-0 mb-0">"{item.notes}"</p>}
+
+        <div className="flex gap-2 mt-auto pt-2">
+          <button className="btn btn-ghost btn-sm flex-1" onClick={() => { void handleDemote(); }} disabled={demoting}>
+            {Icons.undo} {demoting ? "..." : "Wishlist"}
+          </button>
+          <button className="btn btn-accent btn-sm flex-1" onClick={() => { onComplete(); }}>
+            {Icons.check} Complete
+          </button>
+        </div>
+      </div>
+
+      {showConfirm && (
+        <div className="confirm-overlay z-10" onClick={(e) => e.stopPropagation()}>
+          <p className="text-sm">Delete?</p>
+          <div className="flex gap-2">
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowConfirm(false)}>No</button>
+            <button className="btn btn-danger btn-sm" onClick={() => {
+              void deleteItem({ id: item._id });
+              invalidateCurrentlyCache();
+            }}>Yes</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface ImportedEntry {
   title: string;
   type: MediaType;
@@ -1415,19 +1780,13 @@ interface ImportedEntry {
 function parseCSV(text: string): ImportedEntry[] {
   const lines = text.trim().split('\n');
   if (lines.length < 2) return [];
-
-  // Skip header
   const entries: ImportedEntry[] = [];
-
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
     if (!line.trim()) continue;
-
-    // Parse CSV with quoted fields
     const fields: string[] = [];
     let current = '';
     let inQuotes = false;
-
     for (let j = 0; j < line.length; j++) {
       const char = line[j];
       if (char === '"') {
@@ -1440,30 +1799,18 @@ function parseCSV(text: string): ImportedEntry[] {
       }
     }
     fields.push(current);
-
-    // Map fields: title,type,rating,dateWatched,notes,status
     const [title, rawType, rating, dateWatched, notes] = fields;
-
     if (!title?.trim()) continue;
-
-    // Map type from favourites.me format to our format
     const typeMap: Record<string, MediaType> = {
-      'movie': 'movie',
-      'film': 'movie',
+      'movie': 'movie', 'film': 'movie',
       'book': 'book',
-      'tv': 'tvshow',
-      'tvshow': 'tvshow',
-      'show': 'tvshow',
-      'game': 'videogame',
-      'videogame': 'videogame',
-      'boardgame': 'boardgame',
-      'board': 'boardgame',
+      'tv': 'tvshow', 'tvshow': 'tvshow', 'show': 'tvshow',
+      'game': 'videogame', 'videogame': 'videogame',
+      'boardgame': 'boardgame', 'board': 'boardgame',
     };
-
     const type = typeMap[rawType?.toLowerCase().trim()] ?? 'movie';
     const originalRating = parseInt(rating) || 50;
     const date = dateWatched ? new Date(dateWatched).getTime() : Date.now();
-
     entries.push({
       title: title.trim(),
       type,
@@ -1472,14 +1819,12 @@ function parseCSV(text: string): ImportedEntry[] {
       notes: notes?.trim() ?? '',
     });
   }
-
   return entries;
 }
 
 function ImportModal({ existingEntries, onClose }: { existingEntries: MediaEntry[]; onClose: () => void }) {
   const addEntry = useMutation(api.mediaEntries.addMediaEntry);
-
-  const [importType, setImportType] = useState<'favourites.me'>('favourites.me');
+  const [importType] = useState<'favourites.me'>('favourites.me');
   const [entries, setEntries] = useState<ImportedEntry[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [headRating, setHeadRating] = useState(3);
@@ -1495,24 +1840,19 @@ function ImportModal({ existingEntries, onClose }: { existingEntries: MediaEntry
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = (event) => {
       const text = event.target?.result as string;
       const parsed = parseCSV(text);
       setEntries(parsed);
-
-      // Auto-recommend start index based on existing
       let recIndex = 0;
       const existingTitles = new Set(existingEntries.map(e => e.title.toLowerCase().trim()));
-
       for (let i = 0; i < parsed.length; i++) {
         if (!existingTitles.has(parsed[i].title.toLowerCase().trim())) {
           recIndex = i;
           break;
         }
       }
-
       setCurrentIndex(recIndex);
       setSelectionMode(true);
     };
@@ -1528,12 +1868,25 @@ function ImportModal({ existingEntries, onClose }: { existingEntries: MediaEntry
     }
   };
 
+  const moveToNext = () => {
+    if (currentIndex < entries.length - 1) {
+      setCurrentIndex(currentIndex + 1);
+      setHeadRating(3);
+      setHeartRating(3);
+      const nextEnt = entries[currentIndex + 1];
+      if (nextEnt) {
+        setDateWatched(new Date(nextEnt.dateWatched).toISOString().split('T')[0]);
+      }
+    } else {
+      setCurrentIndex(entries.length);
+      setEntries([]);
+    }
+  };
+
   const handleImport = async () => {
     if (!currentEntry) return;
     setLoading(true);
-
     try {
-
       await addEntry({
         title: currentEntry.title,
         type: currentEntry.type,
@@ -1542,7 +1895,7 @@ function ImportModal({ existingEntries, onClose }: { existingEntries: MediaEntry
         dateWatched: dateWatched ? new Date(dateWatched).getTime() : Date.now(),
         notes: currentEntry.notes || undefined,
       });
-      invalidateCache(); // Invalidate cache after import
+      invalidateCache();
       setImportedCount(c => c + 1);
       moveToNext();
     } catch (error) {
@@ -1557,61 +1910,27 @@ function ImportModal({ existingEntries, onClose }: { existingEntries: MediaEntry
     moveToNext();
   };
 
-
-
-  // Enter key mapping
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Enter' && !e.shiftKey) {
-        // Don't trigger if user is typing in a textarea (e.g. notes)
         if (document.activeElement instanceof HTMLTextAreaElement) return;
-
-        // Only trigger if we are in the main import flow (not selection mode, not done)
         if (!selectionMode && entries.length > 0 && currentEntry && !loading) {
           e.preventDefault();
-          handleImport();
+          void handleImport();
         }
       }
-
-      // Rating Navigation
       if (!selectionMode && entries.length > 0 && currentEntry && !['INPUT', 'TEXTAREA', 'SELECT'].includes((document.activeElement as HTMLElement).tagName)) {
-        if (e.key === 'ArrowUp') {
-          e.preventDefault();
-          setHeadRating(h => Math.min(5, h + 1));
-        } else if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          setHeadRating(h => Math.max(1, h - 1));
-        } else if (e.key === 'ArrowLeft') {
-          e.preventDefault();
-          setHeartRating(h => Math.max(1, h - 1));
-        } else if (e.key === 'ArrowRight') {
-          e.preventDefault();
-          setHeartRating(h => Math.min(5, h + 1));
-        }
+        if (e.key === 'ArrowUp') { e.preventDefault(); setHeadRating(h => Math.min(5, h + 1)); }
+        else if (e.key === 'ArrowDown') { e.preventDefault(); setHeadRating(h => Math.max(1, h - 1)); }
+        else if (e.key === 'ArrowLeft') { e.preventDefault(); setHeartRating(h => Math.max(1, h - 1)); }
+        else if (e.key === 'ArrowRight') { e.preventDefault(); setHeartRating(h => Math.min(5, h + 1)); }
       }
     };
-
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectionMode, entries, currentEntry, headRating, heartRating, dateWatched, loading, /* deps for handleImport closure */]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectionMode, entries, currentEntry, headRating, heartRating, loading]);
 
-  const moveToNext = () => {
-    if (currentIndex < entries.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-      setHeadRating(3);
-      setHeartRating(3);
-      const nextEnt = entries[currentIndex + 1];
-      if (nextEnt) {
-        setDateWatched(new Date(nextEnt.dateWatched).toISOString().split('T')[0]);
-      }
-    } else {
-      // Done - ensure we update index to trigger completion view
-      setCurrentIndex(entries.length);
-      setEntries([]);
-    }
-  };
-
-  // Selection Mode UI
   if (selectionMode && entries.length > 0) {
     return (
       <div className="modal-overlay" onClick={onClose}>
@@ -1620,10 +1939,9 @@ function ImportModal({ existingEntries, onClose }: { existingEntries: MediaEntry
           <p className="text-center text-sm opacity-70 mb-4">
             Found {entries.length} rows. We recommend starting at row {currentIndex + 1}.
           </p>
-
-          <div className="max-h-[50vh] overflow-y-auto border border-black/10 rounded mb-4">
+          <div className="max-h-[50vh] overflow-y-auto border border-white/10 rounded mb-4">
             <table className="w-full text-sm text-left border-collapse">
-              <thead className="bg-black/5 sticky top-0">
+              <thead className="bg-white/5 sticky top-0">
                 <tr>
                   <th className="p-2">#</th>
                   <th className="p-2">Title</th>
@@ -1638,7 +1956,7 @@ function ImportModal({ existingEntries, onClose }: { existingEntries: MediaEntry
                   return (
                     <tr
                       key={idx}
-                      className={`cursor-pointer border-b border-black/5 hover:bg-black/5 ${isSelected ? 'bg-[var(--color-secondary)]/20' : ''}`}
+                      className={`cursor-pointer border-b border-white/5 hover:bg-white/5 ${isSelected ? 'bg-[var(--color-secondary)]/20' : ''}`}
                       onClick={() => setCurrentIndex(idx)}
                     >
                       <td className="p-2 opacity-50">{idx + 1}</td>
@@ -1646,9 +1964,9 @@ function ImportModal({ existingEntries, onClose }: { existingEntries: MediaEntry
                       <td className="p-2 opacity-70">{new Date(ent.dateWatched).toLocaleDateString()}</td>
                       <td className="p-2">
                         {exists ? (
-                          <span className="text-xs bg-yellow-100 text-yellow-800 px-1 rounded">Exists</span>
+                          <span className="text-xs bg-yellow-900/30 text-yellow-200 px-1 rounded">Exists</span>
                         ) : (
-                          <span className="text-xs bg-green-100 text-green-800 px-1 rounded">New</span>
+                          <span className="text-xs bg-green-900/30 text-green-200 px-1 rounded">New</span>
                         )}
                       </td>
                     </tr>
@@ -1657,7 +1975,6 @@ function ImportModal({ existingEntries, onClose }: { existingEntries: MediaEntry
               </tbody>
             </table>
           </div>
-
           <div className="flex gap-2 justify-end">
             <button className="btn btn-ghost" onClick={() => setEntries([])}>Cancel</button>
             <button className="btn btn-primary" onClick={startImport}>
@@ -1669,7 +1986,6 @@ function ImportModal({ existingEntries, onClose }: { existingEntries: MediaEntry
     );
   }
 
-  // Import Complete UI
   if (entries.length > 0 && !selectionMode && (currentIndex >= entries.length || !currentEntry)) {
     return (
       <div className="modal-overlay" onClick={onClose}>
@@ -1689,47 +2005,31 @@ function ImportModal({ existingEntries, onClose }: { existingEntries: MediaEntry
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={e => e.stopPropagation()}>
         <h2 className="text-xl mb-4 text-center">Import</h2>
-
         {entries.length === 0 ? (
           <div className="flex flex-col gap-3">
             <div>
               <label className="block mb-1 opacity-70 text-sm">Import Type</label>
-              <select
-                className="select w-full"
-                value={importType}
-                onChange={e => setImportType(e.target.value as 'favourites.me')}
-              >
+              <select className="select w-full" value={importType}>
                 <option value="favourites.me">favourites.me</option>
               </select>
             </div>
-
             <div>
               <label className="block mb-1 opacity-70 text-sm">CSV File</label>
-              <input
-                type="file"
-                accept=".csv"
-                onChange={handleFileUpload}
-                className="input w-full"
-              />
+              <input type="file" accept=".csv" onChange={handleFileUpload} className="input w-full" />
             </div>
-
             <div className="text-sm opacity-60 mt-2">
               <p>Expected format:</p>
-              <code className="text-xs block bg-black/10 p-2 rounded mt-1">
+              <code className="text-xs block bg-white/5 p-2 rounded mt-1">
                 title,type,rating,dateWatched,notes,status
               </code>
             </div>
-
             <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
           </div>
         ) : (
           <div className="flex flex-col gap-1">
-            {/* Progress */}
             <div className="text-center text-sm opacity-70">
               Entry {currentIndex + 1} of {entries.length}
             </div>
-
-            {/* Current Entry Details */}
             {currentEntry && (
               <>
                 <div className="card bg-[var(--color-lavender)]/20 p-3">
@@ -1744,42 +2044,23 @@ function ImportModal({ existingEntries, onClose }: { existingEntries: MediaEntry
                     <p className="text-sm opacity-70 mt-2 italic">"{currentEntry.notes}"</p>
                   )}
                 </div>
-
-                {/* Rating Selection */}
                 <div>
                   <RatingGrid
                     headRating={headRating}
                     heartRating={heartRating}
                     type={currentEntry.type}
-                    onSelect={(head, heart) => {
-                      setHeadRating(head);
-                      setHeartRating(heart);
-                    }}
+                    onSelect={(head, heart) => { setHeadRating(head); setHeartRating(heart); }}
                   />
                 </div>
-
-                {/* Actions */}
                 <div className="flex gap-2">
-                  <button
-                    className="btn btn-ghost flex-1"
-                    onClick={handleSkip}
-                  >
-                    {Icons.skip}
-                    <span>Skip</span>
+                  <button className="btn btn-ghost flex-1" onClick={handleSkip}>
+                    {Icons.skip}<span>Skip</span>
                   </button>
-                  <button
-                    className="btn btn-primary flex-1"
-                    onClick={handleImport}
-                    disabled={loading}
-                  >
-                    {Icons.plus}
-                    <span>{loading ? '...' : 'Import'}</span>
+                  <button className="btn btn-primary flex-1" onClick={() => { void handleImport(); }} disabled={loading}>
+                    {Icons.plus}<span>{loading ? '...' : 'Import'}</span>
                   </button>
                 </div>
-
-                <button className="btn btn-ghost btn-sm text-sm" onClick={onClose}>
-                  Cancel Import
-                </button>
+                <button className="btn btn-ghost btn-sm text-sm" onClick={onClose}>Cancel Import</button>
               </>
             )}
           </div>

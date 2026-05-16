@@ -39,4 +39,20 @@ export default defineSchema({
         dateAdded: v.number(), // timestamp
         notes: v.optional(v.string()),
     }).index("by_user", ["userId"]),
+
+    // Currently reading/watching/playing items
+    currentlyItems: defineTable({
+        userId: v.id("users"),
+        title: v.string(),
+        type: v.union(
+            v.literal("movie"),
+            v.literal("book"),
+            v.literal("tvshow"),
+            v.literal("videogame"),
+            v.literal("boardgame")
+        ),
+        dateStarted: v.number(), // timestamp
+        progress: v.number(), // 0-100
+        notes: v.optional(v.string()),
+    }).index("by_user", ["userId"]),
 });

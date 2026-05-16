@@ -1,17 +1,5 @@
 import { useMemo } from "react";
-import { Id } from "../convex/_generated/dataModel";
-
-// Types derived from App.tsx (would be better shared, but redefining for simplicity in this file)
-type MediaType = "movie" | "book" | "tvshow" | "videogame" | "boardgame";
-interface MediaEntry {
-    _id: Id<"mediaEntries">;
-    title: string;
-    type: MediaType;
-    headRating: number;
-    heartRating: number;
-    dateWatched: number;
-    notes?: string;
-}
+import type { MediaEntry } from "./types";
 
 interface StatsProps {
     entries: MediaEntry[];
@@ -223,10 +211,20 @@ function MediaScatterPlot({ entries }: { entries: MediaEntry[] }) {
     const padding = 30;
 
     // Group identical points to nudge them slightly or size them
-    const points = entries.map(e => {
-        // Jitter slightly to avoid perfect overlap
-        const jitterX = (Math.random() - 0.5) * 0.4;
-        const jitterY = (Math.random() - 0.5) * 0.4;
+  // Hash function for deterministic jitter
+  const hashId = (id: string) => {
+    let h = 0;
+    for (let i = 0; i < id.length; i++) {
+      h = ((h << 5) - h) + id.charCodeAt(i);
+      h |= 0;
+    }
+    return h;
+  };
+
+  const points = entries.map(e => {
+    const seed = hashId(e._id);
+    const jitterX = ((seed % 100) / 100 - 0.5) * 0.4;
+    const jitterY = (((seed * 31 + 7) % 100) / 100 - 0.5) * 0.4;
         return {
             ...e,
             x: e.heartRating + jitterX,

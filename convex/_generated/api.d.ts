@@ -9,7 +9,9 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as currently from "../currently.js";
 import type * as http from "../http.js";
+import type * as lookup from "../lookup.js";
 import type * as mediaEntries from "../mediaEntries.js";
 import type * as wishlist from "../wishlist.js";
 
@@ -21,7 +23,9 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  currently: typeof currently;
   http: typeof http;
+  lookup: typeof lookup;
   mediaEntries: typeof mediaEntries;
   wishlist: typeof wishlist;
 }>;
