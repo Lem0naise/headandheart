@@ -375,6 +375,7 @@ export default function App() {
           {view === "home" ? (
             <Content
               mode={mode}
+              onModeChange={setMode}
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
               cachedData={cachedData}
@@ -462,7 +463,7 @@ function Header({
               <input
                 type="text"
                 className="input py-1 px-3 w-full h-9 text-sm"
-                placeholder="Search..."
+                placeholder="Search... (f)"
                 value={searchQuery}
                 onChange={(e) => onSearchChange(e.target.value)}
               />
@@ -499,6 +500,7 @@ function Header({
                 <button
                   className={`mode-cycle-pill ${modeActiveClass(mode)}`}
                   onClick={() => onModeChange(nextMode(mode))}
+                  title={`${modeLabel(mode)} (keys: l/c/w)`}
                 >
                   {modeLabel(mode)}
                 </button>
@@ -556,6 +558,16 @@ function Header({
                     <span>Import</span>
                   </button>
                 )}
+                <button
+                  className="dropdown-item"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    window.dispatchEvent(new CustomEvent("exportCSV"));
+                  }}
+                >
+                  {Icons.upload}
+                  <span style={{ transform: 'rotate(180deg)' }}>Export</span>
+                </button>
                 <div className="dropdown-divider" />
                 <button
                   className="dropdown-item"
@@ -656,11 +668,13 @@ function SignInForm() {
 
 function Content({
   mode,
+  onModeChange,
   searchQuery,
   cachedData,
   onEntriesUpdate
 }: {
   mode: AppMode;
+  onModeChange: (m: AppMode) => void;
   searchQuery?: string;
   onSearchChange: (q: string) => void;
   cachedData: { data: MediaEntry[]; filter?: string } | null;
@@ -816,12 +830,76 @@ function Content({
 
   const displayCount = isLibrary ? sortedLibraryEntries.length : isWishlist ? sortedWishlistItems.length : sortedCurrentlyItems.length;
 
+  const exportEntriesRef = useRef<MediaEntry[] | null>(null);
+  useEffect(() => { exportEntriesRef.current = libraryDisplayEntries; }, [libraryDisplayEntries]);
+
+  useEffect(() => {
+    const handler = () => {
+      const entriesToExport = exportEntriesRef.current ?? [];
+      if (entriesToExport.length === 0) return;
+      const header = "title,type,rating,dateWatched,notes,status";
+      const rows = entriesToExport.map(e => {
+        const rating = Math.round(((e.headRating + e.heartRating) / 10) * 100);
+        const date = new Date(e.dateWatched).toISOString().split("T")[0];
+        const notes = e.notes ? `"${e.notes.replace(/"/g, '""')}"` : "";
+        const title = `"${e.title.replace(/"/g, '""')}"`;
+        return `${title},${e.type},${rating},${date},${notes},rated`;
+      });
+      const csv = [header, ...rows].join("\n");
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `headandheart-export-${new Date().toISOString().split("T")[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+    window.addEventListener("exportCSV", handler as EventListener);
+    return () => window.removeEventListener("exportCSV", handler as EventListener);
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (document.activeElement as HTMLElement).tagName;
+      const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(tag);
+      const modalOpen = document.querySelector('.modal-overlay');
+      const key = e.key.toLowerCase();
+
+      // 'f' to focus search bar (works even in inputs, but not modals)
+      if (key === 'f' && !modalOpen && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const searchInput = document.querySelector<HTMLInputElement>('header input[type="text"]');
+        if (searchInput && tag !== 'INPUT') {
+          e.preventDefault();
+          searchInput.focus();
+          searchInput.select();
+        }
+        return;
+      }
+
+      if (modalOpen || isInput) return;
+
+      // 'n' or 't' to add new item
+      if (key === 'n' || key === 't') {
+        e.preventDefault();
+        setShowAddForm(true);
+        return;
+      }
+
+      // 'l' Library, 'c' Currently, 'w' Wishlist
+      if (key === 'l') { e.preventDefault(); onModeChange("library"); return; }
+      if (key === 'c') { e.preventDefault(); onModeChange("currently"); return; }
+      if (key === 'w') { e.preventDefault(); onModeChange("wishlist"); return; }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onModeChange]);
+
   return (
     <div className="flex flex-col gap-4">
       <div className="control-bar card">
         <div className="control-row control-row-top">
           <div className="actions-stack">
-            <button className="btn btn-primary btn-lg" onClick={() => setShowAddForm(true)}>
+            <button className="btn btn-primary btn-lg" onClick={() => setShowAddForm(true)} title="Keyboard shortcut: n or t">
               {Icons.plus}
               <span>{isLibrary ? "Add" : isCurrently ? "Add Current" : "Add to Wishlist"}</span>
             </button>
