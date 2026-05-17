@@ -52,7 +52,8 @@ export default defineSchema({
             v.literal("boardgame")
         ),
         dateStarted: v.number(), // timestamp
-        progress: v.number(), // 0-100
+        progress: v.number(), // 0-100 percentage, or current page when totalPages set
         notes: v.optional(v.string()),
+        totalPages: v.optional(v.number()), // for books: total page count
     }).index("by_user", ["userId"]),
 });

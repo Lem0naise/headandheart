@@ -17,6 +17,7 @@ export const addCurrentlyItem = mutation({
     dateStarted: v.number(),
     progress: v.number(),
     notes: v.optional(v.string()),
+    totalPages: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -28,6 +29,7 @@ export const addCurrentlyItem = mutation({
       dateStarted: args.dateStarted,
       progress: args.progress,
       notes: args.notes,
+      totalPages: args.totalPages,
     });
   },
 });
@@ -58,6 +60,7 @@ export const updateCurrentlyItem = mutation({
     dateStarted: v.optional(v.number()),
     progress: v.optional(v.number()),
     notes: v.optional(v.string()),
+    totalPages: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -71,6 +74,7 @@ export const updateCurrentlyItem = mutation({
     if (args.dateStarted !== undefined) updates.dateStarted = args.dateStarted;
     if (args.progress !== undefined) updates.progress = args.progress;
     if (args.notes !== undefined) updates.notes = args.notes;
+    if (args.totalPages !== undefined) updates.totalPages = args.totalPages;
     await ctx.db.patch("currentlyItems", args.id, updates);
   },
 });
@@ -163,6 +167,7 @@ export const bulkAddCurrentlyItems = mutation({
       dateStarted: v.number(),
       progress: v.number(),
       notes: v.optional(v.string()),
+      totalPages: v.optional(v.number()),
     })),
   },
   handler: async (ctx, args) => {
@@ -177,6 +182,7 @@ export const bulkAddCurrentlyItems = mutation({
         dateStarted: item.dateStarted,
         progress: item.progress,
         notes: item.notes,
+        totalPages: item.totalPages,
       });
       ids.push(id);
     }

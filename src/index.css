@@ -64,6 +64,11 @@ body {
   gap: 0.25rem;
 }
 
+.header > .flex {
+  flex-wrap: nowrap;
+  position: relative;
+}
+
 .logo {
   font-size: 1.35rem;
   font-weight: bold;

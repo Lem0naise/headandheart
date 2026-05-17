@@ -449,35 +449,56 @@ function Header({
 
   return (
     <header className="header">
-      <div className="flex items-center gap-2 md:gap-4 flex-1">
+      <div className="flex items-center justify-between w-full md:gap-4">
         <div className="logo cursor-pointer shrink-0" onClick={() => onViewChange?.("home")}>
           <span className="logo-icon">{Icons.heart}</span>
           <span className="hidden md:inline">HeadandHeart</span>
         </div>
 
+        {/* Desktop search + mode */}
         {isAuthenticated && currentView === "home" && (
-          <div className="hidden md:block flex-1 max-w-sm">
-            <input
-              type="text"
-              className="input py-1 px-3 w-full h-9 text-sm"
-              placeholder="Search..."
-              value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
-            />
+          <div className="hidden md:flex items-center gap-2 flex-1 justify-center">
+            <div className="max-w-sm w-full">
+              <input
+                type="text"
+                className="input py-1 px-3 w-full h-9 text-sm"
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => onSearchChange(e.target.value)}
+              />
+            </div>
           </div>
         )}
-      </div>
 
-      {isAuthenticated && (
-        <div className="flex items-center gap-1.5 md:gap-2">
-          {currentView === "home" && (
-            <>
-              {/* Desktop mode pill */}
+        {/* Mobile mode nav — centered */}
+        {isAuthenticated && currentView === "home" && (
+          <div className="flex md:hidden items-center gap-0.5 absolute left-1/2 -translate-x-1/2">
+            {mode !== "library" && (
+              <button className="mode-arrow-btn" onClick={() => onModeChange(mode === "wishlist" ? "currently" : "library")} title="Previous">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15,18 9,12 15,6" /></svg>
+              </button>
+            )}
+            <button
+              className={`mode-cycle-pill text-xs px-2 py-1 ${modeActiveClass(mode)}`}
+              onClick={() => onModeChange(nextMode(mode))}
+            >
+              {mode === "library" ? "Library" : mode === "currently" ? "Currently" : "Wishlist"}
+            </button>
+            {mode !== "wishlist" && (
+              <button className="mode-arrow-btn" onClick={() => onModeChange(mode === "library" ? "currently" : "wishlist")} title="Next">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9,18 15,12 9,6" /></svg>
+              </button>
+            )}
+          </div>
+        )}
+
+        {isAuthenticated && (
+          <div className="flex items-center gap-1.5 md:gap-2">
+            {currentView === "home" && (
               <div className="hidden md:flex items-center gap-1.5">
                 <button
                   className={`mode-cycle-pill ${modeActiveClass(mode)}`}
                   onClick={() => onModeChange(nextMode(mode))}
-                  title={`Switch to ${modeLabel(nextMode(mode))}`}
                 >
                   {modeLabel(mode)}
                 </button>
@@ -490,33 +511,12 @@ function Header({
                   <span>Stats</span>
                 </button>
               </div>
+            )}
 
-              {/* Mobile mode nav */}
-              <div className="flex md:hidden items-center gap-0.5">
-                {mode !== "library" && (
-                  <button className="mode-arrow-btn" onClick={() => onModeChange(mode === "wishlist" ? "currently" : "library")} title="Previous">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15,18 9,12 15,6" /></svg>
-                  </button>
-                )}
-                <button
-                  className={`mode-cycle-pill text-xs px-2 py-1 ${modeActiveClass(mode)}`}
-                  onClick={() => onModeChange(nextMode(mode))}
-                >
-                  {mode === "library" ? "Library" : mode === "currently" ? "Currently" : "Wishlist"}
-                </button>
-                {mode !== "wishlist" && (
-                  <button className="mode-arrow-btn" onClick={() => onModeChange(mode === "library" ? "currently" : "wishlist")} title="Next">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9,18 15,12 9,6" /></svg>
-                  </button>
-                )}
-              </div>
-            </>
-          )}
-
-          <div className="dropdown">
-            <button className="menu-btn" onClick={() => setMenuOpen(!menuOpen)}>
-              {menuOpen ? Icons.close : Icons.menu}
-            </button>
+            <div className="dropdown">
+              <button className="menu-btn" onClick={() => setMenuOpen(!menuOpen)}>
+                {menuOpen ? Icons.close : Icons.menu}
+              </button>
 
             {menuOpen && (
               <div className="dropdown-menu">
@@ -569,6 +569,8 @@ function Header({
           </div>
         </div>
       )}
+
+      </div>
 
       {/* Mobile Search Bar */}
       {isAuthenticated && currentView === "home" && (
@@ -1343,23 +1345,27 @@ function CurrentlyModal({ item, initialType, onClose }: { item?: CurrentlyItem; 
     item ? new Date(item.dateStarted).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]
   );
   const [progress, setProgress] = useState(item?.progress ?? 0);
+  const [totalPages, setTotalPages] = useState(item?.totalPages ?? 0);
   const [notes, setNotes] = useState(item?.notes ?? "");
   const [loading, setLoading] = useState(false);
   const [bulkMode, setBulkMode] = useState(false);
   const [bulkText, setBulkText] = useState("");
 
   const isEditing = !!item;
+  const isBook = type === "book" && totalPages > 0;
+  const effectiveProgress = isBook ? Math.min(100, Math.round((progress / totalPages) * 100)) : progress;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
     setLoading(true);
     try {
-      const payload = { title: title.trim(), type, dateStarted: new Date(dateStarted).getTime(), progress, notes: notes.trim() || undefined };
+      const payload: Record<string, unknown> = { title: title.trim(), type, dateStarted: new Date(dateStarted).getTime(), progress, notes: notes.trim() || undefined };
+      if (type === "book" && totalPages > 0) payload.totalPages = totalPages;
       if (isEditing) {
-        await updateItem({ id: item._id, ...payload });
+        await updateItem({ id: item._id, ...payload } as Parameters<typeof updateItem>[0]);
       } else {
-        await addItem(payload);
+        await addItem(payload as Parameters<typeof addItem>[0]);
       }
       invalidateCurrentlyCache();
       onClose();
@@ -1375,15 +1381,11 @@ function CurrentlyModal({ item, initialType, onClose }: { item?: CurrentlyItem; 
     if (lines.length === 0) return;
     setLoading(true);
     try {
+      const itemPayload: Record<string, unknown> = { title: "", type, dateStarted: new Date(dateStarted).getTime(), progress, notes: notes.trim() || undefined };
+      if (type === "book" && totalPages > 0) itemPayload.totalPages = totalPages;
       await bulkAdd({
-        items: lines.map(title => ({
-          title,
-          type,
-          dateStarted: new Date(dateStarted).getTime(),
-          progress,
-          notes: notes.trim() || undefined,
-        })),
-      });
+        items: lines.map(title => ({ ...itemPayload, title })),
+      } as Parameters<typeof bulkAdd>[0]);
       invalidateCurrentlyCache();
       onClose();
     } catch (error) {
@@ -1423,20 +1425,29 @@ function CurrentlyModal({ item, initialType, onClose }: { item?: CurrentlyItem; 
                 onChange={(e) => setDateStarted(e.target.value)}
               />
             </div>
-            <div>
-              <div className="flex justify-between items-center mb-1">
-                <label className="text-sm opacity-70">Progress</label>
-                <span className="text-sm font-bold">{progress}%</span>
+            {type === "book" ? (
+              <div>
+                <label className="text-sm opacity-70">Page progress</label>
+                <div className="flex gap-2 items-center">
+                  <input className="input flex-1" type="number" min="0" value={progress || ""} onChange={(e) => setProgress(Number(e.target.value))} placeholder="Page" />
+                  <span className="opacity-40 text-sm">/</span>
+                  <input className="input flex-1" type="number" min="1" value={totalPages || ""} onChange={(e) => setTotalPages(Number(e.target.value))} placeholder="Total" />
+                </div>
+                {totalPages > 0 && (
+                  <div className="progress-bar mt-2">
+                    <div className="progress-fill" style={{ width: `${effectiveProgress}%` }} />
+                  </div>
+                )}
               </div>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={progress}
-                onChange={(e) => setProgress(Number(e.target.value))}
-                className="slider w-full"
-              />
-            </div>
+            ) : (
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-sm opacity-70">Progress</label>
+                  <span className="text-sm font-bold">{progress}%</span>
+                </div>
+                <input type="range" min="0" max="100" value={progress} onChange={(e) => setProgress(Number(e.target.value))} className="slider w-full" />
+              </div>
+            )}
             <textarea
               className="input w-full resize-none"
               rows={8}
@@ -1478,20 +1489,50 @@ function CurrentlyModal({ item, initialType, onClose }: { item?: CurrentlyItem; 
               />
             </div>
             <MediaSearchAutocomplete type={type} value={title} onChange={setTitle} />
-            <div>
-              <div className="flex justify-between items-center mb-1">
-                <label className="text-sm opacity-70">Progress</label>
-                <span className="text-sm font-bold">{progress}%</span>
+            {type === "book" ? (
+              <div>
+                <label className="text-sm opacity-70">Page progress</label>
+                <div className="flex gap-2 items-center">
+                  <input
+                    className="input flex-1"
+                    type="number"
+                    min="0"
+                    value={progress || ""}
+                    onChange={(e) => setProgress(Number(e.target.value))}
+                    placeholder="Page"
+                  />
+                  <span className="opacity-40 text-sm">/</span>
+                  <input
+                    className="input flex-1"
+                    type="number"
+                    min="1"
+                    value={totalPages || ""}
+                    onChange={(e) => setTotalPages(Number(e.target.value))}
+                    placeholder="Total"
+                  />
+                </div>
+                {totalPages > 0 && (
+                  <div className="progress-bar mt-2">
+                    <div className="progress-fill" style={{ width: `${effectiveProgress}%` }} />
+                  </div>
+                )}
               </div>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={progress}
-                onChange={(e) => setProgress(Number(e.target.value))}
-                className="slider w-full"
-              />
-            </div>
+            ) : (
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-sm opacity-70">Progress</label>
+                  <span className="text-sm font-bold">{progress}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={progress}
+                  onChange={(e) => setProgress(Number(e.target.value))}
+                  className="slider w-full"
+                />
+              </div>
+            )}
             <textarea
               className="input w-full resize-none"
               rows={2}
@@ -1857,6 +1898,14 @@ function CurrentlyCard({
     month: "short", day: "numeric", year: "numeric",
   });
 
+  const isBookTracked = item.type === "book" && item.totalPages != null && item.totalPages > 0;
+  const displayProgress = isBookTracked
+    ? Math.min(100, Math.round((item.progress / item.totalPages!) * 100))
+    : item.progress;
+  const progressLabel = isBookTracked
+    ? `${item.progress} / ${item.totalPages} pages`
+    : `${item.progress}%`;
+
   const handleDemote = async () => {
     setDemoting(true);
     try {
@@ -1873,7 +1922,7 @@ function CurrentlyCard({
   return (
     <div className="card entry-card relative group p-0 overflow-hidden flex flex-col card-in" style={{ animationDelay: `${index * 40}ms` }}>
       <div className={`entry-banner type-${item.type}`}>
-        <div className="entry-banner-fill" style={{ width: `${item.progress}%`, background: 'var(--color-accent)' }} />
+        <div className="entry-banner-fill" style={{ width: `${displayProgress}%`, background: 'var(--color-accent)' }} />
         <div className="entry-banner-content">
           <div className="flex items-center gap-2">
             <span>{typeInfo?.icon}</span>
@@ -1896,11 +1945,11 @@ function CurrentlyCard({
         </div>
 
         <div className="progress-bar">
-          <div className="progress-fill" style={{ width: `${item.progress}%` }} />
+          <div className="progress-fill" style={{ width: `${displayProgress}%` }} />
         </div>
         <div className="progress-label">
-          <span>{item.progress}% complete</span>
-          <span>{item.progress >= 100 ? "Done!" : ""}</span>
+          <span>{progressLabel}</span>
+          <span>{displayProgress >= 100 ? "Done!" : ""}</span>
         </div>
 
         {item.notes && <p className="entry-notes mt-0 mb-0">"{item.notes}"</p>}

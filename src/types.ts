@@ -27,6 +27,7 @@ export interface CurrentlyItem {
   dateStarted: number;
   progress: number;
   notes?: string;
+  totalPages?: number;
 }
 
 export type LibrarySortOption = "dateNewest" | "dateOldest" | "alphaAZ" | "alphaZA" | "rating";
