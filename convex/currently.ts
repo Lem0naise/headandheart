@@ -154,3 +154,32 @@ export const demoteCurrently = mutation({
     await ctx.db.delete("currentlyItems", args.currentlyItemId);
   },
 });
+
+export const bulkAddCurrentlyItems = mutation({
+  args: {
+    items: v.array(v.object({
+      title: v.string(),
+      type: mediaTypeValidator,
+      dateStarted: v.number(),
+      progress: v.number(),
+      notes: v.optional(v.string()),
+    })),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+    const ids = [];
+    for (const item of args.items) {
+      const id = await ctx.db.insert("currentlyItems", {
+        userId,
+        title: item.title,
+        type: item.type,
+        dateStarted: item.dateStarted,
+        progress: item.progress,
+        notes: item.notes,
+      });
+      ids.push(id);
+    }
+    return ids;
+  },
+});

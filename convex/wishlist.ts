@@ -111,3 +111,30 @@ export const deleteWishlistItem = mutation({
     await ctx.db.delete("wishlistItems", args.id);
   },
 });
+
+export const bulkAddWishlistItems = mutation({
+  args: {
+    items: v.array(v.object({
+      title: v.string(),
+      type: mediaTypeValidator,
+      dateAdded: v.number(),
+      notes: v.optional(v.string()),
+    })),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+    const ids = [];
+    for (const item of args.items) {
+      const id = await ctx.db.insert("wishlistItems", {
+        userId,
+        title: item.title,
+        type: item.type,
+        dateAdded: item.dateAdded,
+        notes: item.notes,
+      });
+      ids.push(id);
+    }
+    return ids;
+  },
+});

@@ -28,6 +28,8 @@ body {
   height: 100%;
   min-height: 100dvh;
   min-height: 100vh;
+  max-width: 100vw;
+  overflow-x: hidden;
   color: var(--color-light);
   background: linear-gradient(135deg, #1a1722 0%, #2d2a32 30%, #221d28 60%, #1a1d22 100%);
   background-attachment: fixed;
@@ -36,12 +38,15 @@ body {
 #root {
   min-height: 100dvh;
   min-height: 100vh;
+  max-width: 100vw;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
 }
 
 #root main {
   flex: 1;
+  max-width: 100vw;
 }
 
 /* Header */
@@ -49,12 +54,14 @@ body {
   background: linear-gradient(90deg, #c47db0 0%, var(--color-lavender) 50%, #7da8d6 100%);
   padding: 0.5rem 1rem;
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   position: sticky;
   top: 0;
   z-index: 100;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+  gap: 0.25rem;
 }
 
 .logo {
@@ -67,8 +74,31 @@ body {
 }
 
 .logo-icon {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
+}
+
+/* Mobile mode arrow nav buttons */
+.mode-arrow-btn {
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 16px;
+  cursor: pointer;
+  padding: 0.15rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+  color: var(--color-dark);
+}
+
+.mode-arrow-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.mode-arrow-btn svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* Menu button */
@@ -185,15 +215,28 @@ body {
     flex-direction: column;
     gap: 0.75rem;
     width: 100%;
+    max-width: 100%;
   }
 
   .entry-card {
     display: flex;
     flex-direction: column;
     width: 100%;
+    max-width: 100%;
   }
 
   .entry-title {
+    font-size: 1.3rem;
+    word-break: break-word;
+    overflow-wrap: break-word;
+  }
+
+  .entry-banner-content {
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+
+  .entry-banner-content .rating-score-large {
     font-size: 1.3rem;
   }
 }
@@ -609,6 +652,7 @@ body {
   overflow-x: auto;
   padding-bottom: 0.25rem;
   scrollbar-width: thin;
+  max-width: 100%;
 }
 
 .filter-scroll::-webkit-scrollbar {

@@ -446,60 +446,70 @@ function Header({
   const { isAuthenticated } = useConvexAuth();
   const { signOut } = useAuthActions();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   return (
-    <header className="header relative">
-      <div className="flex items-center gap-4 flex-1">
+    <header className="header">
+      <div className="flex items-center gap-2 md:gap-4 flex-1">
         <div className="logo cursor-pointer shrink-0" onClick={() => onViewChange?.("home")}>
           <span className="logo-icon">{Icons.heart}</span>
-          <span className="inline">HeadandHeart</span>
+          <span className="hidden md:inline">HeadandHeart</span>
         </div>
 
         {isAuthenticated && currentView === "home" && (
           <div className="hidden md:block flex-1 max-w-sm">
-            <div className="relative">
-              <input
-                type="text"
-                className="input py-1 px-3 w-full pl-9 h-9 text-sm"
-                placeholder="Search..."
-                value={searchQuery}
-                onChange={(e) => onSearchChange(e.target.value)}
-              />
-            </div>
+            <input
+              type="text"
+              className="input py-1 px-3 w-full h-9 text-sm"
+              placeholder="Search..."
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+            />
           </div>
         )}
       </div>
 
       {isAuthenticated && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 md:gap-2">
           {currentView === "home" && (
             <>
-              <button
-                className="btn btn-secondary btn-sm md:!hidden px-2"
-                onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
-                title="Search"
-              >
-                {Icons.search}
-              </button>
+              {/* Desktop mode pill */}
+              <div className="hidden md:flex items-center gap-1.5">
+                <button
+                  className={`mode-cycle-pill ${modeActiveClass(mode)}`}
+                  onClick={() => onModeChange(nextMode(mode))}
+                  title={`Switch to ${modeLabel(nextMode(mode))}`}
+                >
+                  {modeLabel(mode)}
+                </button>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => onViewChange?.("stats")}
+                  title="Taste Stats"
+                >
+                  {Icons.chart}
+                  <span>Stats</span>
+                </button>
+              </div>
 
-              <button
-                className={`mode-cycle-pill ${modeActiveClass(mode)}`}
-                onClick={() => onModeChange(nextMode(mode))}
-                title={`Switch to ${modeLabel(nextMode(mode))}`}
-              >
-                <span className="hidden sm:inline">{modeLabel(mode)}</span>
-                <span className="sm:hidden">{mode === "library" ? "Lib" : mode === "currently" ? "Now" : "Wish"}</span>
-              </button>
-
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => onViewChange?.("stats")}
-                title="Taste Stats"
-              >
-                {Icons.chart}
-                <span className="hidden md:inline">Stats</span>
-              </button>
+              {/* Mobile mode nav */}
+              <div className="flex md:hidden items-center gap-0.5">
+                {mode !== "library" && (
+                  <button className="mode-arrow-btn" onClick={() => onModeChange(mode === "wishlist" ? "currently" : "library")} title="Previous">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15,18 9,12 15,6" /></svg>
+                  </button>
+                )}
+                <button
+                  className={`mode-cycle-pill text-xs px-2 py-1 ${modeActiveClass(mode)}`}
+                  onClick={() => onModeChange(nextMode(mode))}
+                >
+                  {mode === "library" ? "Library" : mode === "currently" ? "Currently" : "Wishlist"}
+                </button>
+                {mode !== "wishlist" && (
+                  <button className="mode-arrow-btn" onClick={() => onModeChange(mode === "library" ? "currently" : "wishlist")} title="Next">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9,18 15,12 9,6" /></svg>
+                  </button>
+                )}
+              </div>
             </>
           )}
 
@@ -518,7 +528,7 @@ function Header({
                   <span>Home</span>
                 </button>
                 <button
-                  className="dropdown-item"
+                  className="dropdown-item md:hidden"
                   onClick={() => { onViewChange?.("stats"); setMenuOpen(false); }}
                 >
                   {Icons.chart}
@@ -560,18 +570,16 @@ function Header({
         </div>
       )}
 
-      {mobileSearchOpen && currentView === "home" && (
-        <div className="absolute top-full left-0 right-0 p-2 bg-[var(--color-card-dark)] border-b border-white/10 shadow-md md:hidden z-10 animate-in">
-          <div className="relative">
-            <input
-              autoFocus
-              type="text"
-              className="input w-full pl-9"
-              placeholder="Search..."
-              value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
-            />
-          </div>
+      {/* Mobile Search Bar */}
+      {isAuthenticated && currentView === "home" && (
+        <div className="flex md:hidden w-full mt-2">
+          <input
+            type="text"
+            className="input w-full py-1 px-3 h-8 text-sm"
+            placeholder="Search..."
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+          />
         </div>
       )}
     </header>
@@ -873,9 +881,9 @@ function Content({
         </div>
       </div>
 
-      {showAddForm && isLibrary && <EntryModal onClose={() => setShowAddForm(false)} />}
-      {showAddForm && isCurrently && <CurrentlyModal onClose={() => setShowAddForm(false)} />}
-      {showAddForm && isWishlist && <WishlistModal onClose={() => setShowAddForm(false)} />}
+      {showAddForm && isLibrary && <EntryModal initialType={typeFilter === "all" ? undefined : typeFilter} onClose={() => setShowAddForm(false)} />}
+      {showAddForm && isCurrently && <CurrentlyModal initialType={typeFilter === "all" ? undefined : typeFilter} onClose={() => setShowAddForm(false)} />}
+      {showAddForm && isWishlist && <WishlistModal initialType={typeFilter === "all" ? undefined : typeFilter} onClose={() => setShowAddForm(false)} />}
       {showImport && !isWishlist && <ImportModal existingEntries={entries || []} onClose={() => setShowImport(false)} />}
       {editingEntry && isLibrary && <EntryModal entry={editingEntry} onClose={() => setEditingEntry(null)} />}
       {editingWishlist && isWishlist && <WishlistModal item={editingWishlist} onClose={() => setEditingWishlist(null)} />}
@@ -1032,12 +1040,12 @@ function MediaSearchAutocomplete({
   );
 }
 
-function EntryModal({ entry, onClose }: { entry?: MediaEntry; onClose: () => void }) {
+function EntryModal({ entry, initialType, onClose }: { entry?: MediaEntry; initialType?: MediaType; onClose: () => void }) {
   const addEntry = useMutation(api.mediaEntries.addMediaEntry);
   const updateEntry = useMutation(api.mediaEntries.updateMediaEntry);
 
   const [title, setTitle] = useState(entry?.title ?? "");
-  const [type, setType] = useState<MediaType>(entry?.type ?? "movie");
+  const [type, setType] = useState<MediaType>(entry?.type ?? initialType ?? "movie");
   const [headRating, setHeadRating] = useState(entry?.headRating ?? 3);
   const [heartRating, setHeartRating] = useState(entry?.heartRating ?? 3);
   const [dateWatched, setDateWatched] = useState(
@@ -1174,17 +1182,20 @@ function EntryModal({ entry, onClose }: { entry?: MediaEntry; onClose: () => voi
   );
 }
 
-function WishlistModal({ item, onClose }: { item?: WishlistItem; onClose: () => void }) {
+function WishlistModal({ item, initialType, onClose }: { item?: WishlistItem; initialType?: MediaType; onClose: () => void }) {
   const addItem = useMutation(api.wishlist.addWishlistItem);
   const updateItem = useMutation(api.wishlist.updateWishlistItem);
+  const bulkAdd = useMutation(api.wishlist.bulkAddWishlistItems);
 
   const [title, setTitle] = useState(item?.title ?? "");
-  const [type, setType] = useState<MediaType>(item?.type ?? "movie");
+  const [type, setType] = useState<MediaType>(item?.type ?? initialType ?? "movie");
   const [dateAdded, setDateAdded] = useState(
     item ? new Date(item.dateAdded).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]
   );
   const [notes, setNotes] = useState(item?.notes ?? "");
   const [loading, setLoading] = useState(false);
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkText, setBulkText] = useState("");
 
   const isEditing = !!item;
 
@@ -1208,64 +1219,134 @@ function WishlistModal({ item, onClose }: { item?: WishlistItem; onClose: () => 
     }
   };
 
+  const handleBulkAdd = async () => {
+    const lines = bulkText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    if (lines.length === 0) return;
+    setLoading(true);
+    try {
+      await bulkAdd({
+        items: lines.map(title => ({
+          title,
+          type,
+          dateAdded: new Date(dateAdded).getTime(),
+          notes: notes.trim() || undefined,
+        })),
+      });
+      invalidateWishlistCache();
+      onClose();
+    } catch (error) {
+      console.error("Failed bulk add:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-xl mb-4 text-center">{isEditing ? "Edit Wishlist Item" : "Add to Wishlist"}</h2>
-        <form onSubmit={(e) => { void handleSubmit(e); }} className="flex flex-col gap-3">
-          <input
-            className="input w-full"
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Title"
-            required
-          />
-          <div className="flex gap-2">
-            <select className="select flex-1" value={type} onChange={(e) => setType(e.target.value as MediaType)}>
-              {MEDIA_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </select>
-            <input
-              className="input flex-1"
-              type="date"
-              value={dateAdded}
-              onChange={(e) => setDateAdded(e.target.value)}
-            />
-          </div>
-          <MediaSearchAutocomplete type={type} value={title} onChange={setTitle} />
-          <textarea
-            className="input w-full resize-none"
-            rows={3}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Notes (optional)"
-          />
-          <div className="flex gap-2 justify-end">
-            <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn btn-primary btn-sm" disabled={loading || !title.trim()}>
-              {loading ? "..." : isEditing ? "Save" : "Add"}
+        {!isEditing && (
+          <div className="flex justify-end mb-2">
+            <button
+              type="button"
+              className={`btn btn-ghost btn-sm text-xs ${bulkMode ? 'active' : ''}`}
+              onClick={() => { setBulkMode(!bulkMode); setBulkText(""); }}
+            >
+              {bulkMode ? 'Single' : 'Add Multiple'}
             </button>
           </div>
-        </form>
+        )}
+        {bulkMode && !isEditing ? (
+          <div className="flex flex-col gap-3">
+            <div className="flex gap-2">
+              <select className="select flex-1" value={type} onChange={(e) => setType(e.target.value as MediaType)}>
+                {MEDIA_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+              <input
+                className="input flex-1"
+                type="date"
+                value={dateAdded}
+                onChange={(e) => setDateAdded(e.target.value)}
+              />
+            </div>
+            <textarea
+              className="input w-full resize-none"
+              rows={8}
+              value={bulkText}
+              onChange={(e) => setBulkText(e.target.value)}
+              placeholder={`One per line...\nDune\nFoundation\nNeuromancer`}
+            />
+            {bulkText.trim() && (
+              <div className="text-xs opacity-50">{bulkText.split('\n').filter(l => l.trim()).length} items</div>
+            )}
+            <div className="flex gap-2 justify-end">
+              <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
+              <button className="btn btn-primary btn-sm" onClick={() => { void handleBulkAdd(); }} disabled={loading || !bulkText.trim()}>
+                {loading ? "..." : `Add ${bulkText.split('\n').filter(l => l.trim()).length || 0}`}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={(e) => { void handleSubmit(e); }} className="flex flex-col gap-3">
+            <input
+              className="input w-full"
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Title"
+              required
+            />
+            <div className="flex gap-2">
+              <select className="select flex-1" value={type} onChange={(e) => setType(e.target.value as MediaType)}>
+                {MEDIA_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+              <input
+                className="input flex-1"
+                type="date"
+                value={dateAdded}
+                onChange={(e) => setDateAdded(e.target.value)}
+              />
+            </div>
+            <MediaSearchAutocomplete type={type} value={title} onChange={setTitle} />
+            <textarea
+              className="input w-full resize-none"
+              rows={3}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Notes (optional)"
+            />
+            <div className="flex gap-2 justify-end">
+              <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
+              <button type="submit" className="btn btn-primary btn-sm" disabled={loading || !title.trim()}>
+                {loading ? "..." : isEditing ? "Save" : "Add"}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );
 }
 
-function CurrentlyModal({ item, onClose }: { item?: CurrentlyItem; onClose: () => void }) {
+function CurrentlyModal({ item, initialType, onClose }: { item?: CurrentlyItem; initialType?: MediaType; onClose: () => void }) {
   const addItem = useMutation(api.currently.addCurrentlyItem);
   const updateItem = useMutation(api.currently.updateCurrentlyItem);
+  const bulkAdd = useMutation(api.currently.bulkAddCurrentlyItems);
 
   const [title, setTitle] = useState(item?.title ?? "");
-  const [type, setType] = useState<MediaType>(item?.type ?? "movie");
+  const [type, setType] = useState<MediaType>(item?.type ?? initialType ?? "movie");
   const [dateStarted, setDateStarted] = useState(
     item ? new Date(item.dateStarted).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]
   );
   const [progress, setProgress] = useState(item?.progress ?? 0);
   const [notes, setNotes] = useState(item?.notes ?? "");
   const [loading, setLoading] = useState(false);
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkText, setBulkText] = useState("");
 
   const isEditing = !!item;
 
@@ -1289,61 +1370,143 @@ function CurrentlyModal({ item, onClose }: { item?: CurrentlyItem; onClose: () =
     }
   };
 
+  const handleBulkAdd = async () => {
+    const lines = bulkText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    if (lines.length === 0) return;
+    setLoading(true);
+    try {
+      await bulkAdd({
+        items: lines.map(title => ({
+          title,
+          type,
+          dateStarted: new Date(dateStarted).getTime(),
+          progress,
+          notes: notes.trim() || undefined,
+        })),
+      });
+      invalidateCurrentlyCache();
+      onClose();
+    } catch (error) {
+      console.error("Failed bulk add:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-xl mb-4 text-center">{isEditing ? "Edit Current Item" : "Add Current Item"}</h2>
-        <form onSubmit={(e) => { void handleSubmit(e); }} className="flex flex-col gap-3">
-          <input
-            className="input w-full"
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Title"
-            required
-          />
-          <div className="flex gap-2">
-            <select className="select flex-1" value={type} onChange={(e) => setType(e.target.value as MediaType)}>
-              {MEDIA_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </select>
-            <input
-              className="input flex-1"
-              type="date"
-              value={dateStarted}
-              onChange={(e) => setDateStarted(e.target.value)}
-            />
-          </div>
-          <MediaSearchAutocomplete type={type} value={title} onChange={setTitle} />
-          <div>
-            <div className="flex justify-between items-center mb-1">
-              <label className="text-sm opacity-70">Progress</label>
-              <span className="text-sm font-bold">{progress}%</span>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={progress}
-              onChange={(e) => setProgress(Number(e.target.value))}
-              className="slider w-full"
-            />
-          </div>
-          <textarea
-            className="input w-full resize-none"
-            rows={2}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Notes (optional)"
-          />
-          <div className="flex gap-2 justify-end">
-            <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn btn-primary btn-sm" disabled={loading || !title.trim()}>
-              {loading ? "..." : isEditing ? "Save" : "Add"}
+        {!isEditing && (
+          <div className="flex justify-end mb-2">
+            <button
+              type="button"
+              className={`btn btn-ghost btn-sm text-xs ${bulkMode ? 'active' : ''}`}
+              onClick={() => { setBulkMode(!bulkMode); setBulkText(""); }}
+            >
+              {bulkMode ? 'Single' : 'Add Multiple'}
             </button>
           </div>
-        </form>
+        )}
+        {bulkMode && !isEditing ? (
+          <div className="flex flex-col gap-3">
+            <div className="flex gap-2">
+              <select className="select flex-1" value={type} onChange={(e) => setType(e.target.value as MediaType)}>
+                {MEDIA_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+              <input
+                className="input flex-1"
+                type="date"
+                value={dateStarted}
+                onChange={(e) => setDateStarted(e.target.value)}
+              />
+            </div>
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label className="text-sm opacity-70">Progress</label>
+                <span className="text-sm font-bold">{progress}%</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={progress}
+                onChange={(e) => setProgress(Number(e.target.value))}
+                className="slider w-full"
+              />
+            </div>
+            <textarea
+              className="input w-full resize-none"
+              rows={8}
+              value={bulkText}
+              onChange={(e) => setBulkText(e.target.value)}
+              placeholder={`One per line...\nDune\nFoundation\nNeuromancer`}
+            />
+            {bulkText.trim() && (
+              <div className="text-xs opacity-50">{bulkText.split('\n').filter(l => l.trim()).length} items</div>
+            )}
+            <div className="flex gap-2 justify-end">
+              <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
+              <button className="btn btn-primary btn-sm" onClick={() => { void handleBulkAdd(); }} disabled={loading || !bulkText.trim()}>
+                {loading ? "..." : `Add ${bulkText.split('\n').filter(l => l.trim()).length || 0}`}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={(e) => { void handleSubmit(e); }} className="flex flex-col gap-3">
+            <input
+              className="input w-full"
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Title"
+              required
+            />
+            <div className="flex gap-2">
+              <select className="select flex-1" value={type} onChange={(e) => setType(e.target.value as MediaType)}>
+                {MEDIA_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+              <input
+                className="input flex-1"
+                type="date"
+                value={dateStarted}
+                onChange={(e) => setDateStarted(e.target.value)}
+              />
+            </div>
+            <MediaSearchAutocomplete type={type} value={title} onChange={setTitle} />
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label className="text-sm opacity-70">Progress</label>
+                <span className="text-sm font-bold">{progress}%</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={progress}
+                onChange={(e) => setProgress(Number(e.target.value))}
+                className="slider w-full"
+              />
+            </div>
+            <textarea
+              className="input w-full resize-none"
+              rows={2}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Notes (optional)"
+            />
+            <div className="flex gap-2 justify-end">
+              <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
+              <button type="submit" className="btn btn-primary btn-sm" disabled={loading || !title.trim()}>
+                {loading ? "..." : isEditing ? "Save" : "Add"}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );
@@ -1653,7 +1816,6 @@ function MediaEntryCard({
             {!globalMatched && expanded && (entry.type === "movie" || entry.type === "tvshow" || entry.type === "book") && (
               <div className="text-xs opacity-30 italic">Comparing to {entry.type === "book" ? "OpenLibrary" : "TMDB"}...</div>
             )}
-            {entry.notes && <p className="text-sm opacity-80 italic leading-relaxed">"{entry.notes}"</p>}
           </div>
         </div>
       </div>
