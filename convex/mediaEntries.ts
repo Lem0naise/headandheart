@@ -60,17 +60,20 @@ export const getMediaEntries = query({
             return [];
         }
 
-        let entries = await ctx.db
+        if (args.typeFilter) {
+            const type = args.typeFilter;
+            return await ctx.db
+                .query("mediaEntries")
+                .withIndex("by_user_and_type", (q) =>
+                    q.eq("userId", userId).eq("type", type)
+                )
+                .collect();
+        }
+
+        return await ctx.db
             .query("mediaEntries")
             .withIndex("by_user", (q) => q.eq("userId", userId))
             .collect();
-
-        // Apply type filter if specified
-        if (args.typeFilter) {
-            entries = entries.filter((entry) => entry.type === args.typeFilter);
-        }
-
-        return entries;
     },
 });
 

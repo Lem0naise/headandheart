@@ -5,11 +5,34 @@ import { v } from "convex/values";
 
 const TMDB_BASE = "https://api.themoviedb.org/3";
 const OL_BASE = "https://openlibrary.org";
+const WIKI_BASE = "https://en.wikipedia.org/w/api.php";
 
 function getTmdbKey() {
   const key = process.env.TMDB_API_KEY;
   if (!key) throw new Error("TMDB_API_KEY not set in Convex environment. Run: npx convex env set TMDB_API_KEY <key>");
   return key;
+}
+
+async function fetchWithRetry(url: string, retries = 3): Promise<Response> {
+  let lastError: unknown;
+  for (let i = 0; i < retries; i++) {
+    try {
+      const res = await fetch(url);
+      if (res.ok) return res;
+      if (res.status === 429 || res.status >= 500) {
+        lastError = new Error(`HTTP ${res.status}`);
+        await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, i)));
+        continue;
+      }
+      return res;
+    } catch (err) {
+      lastError = err;
+      if (i < retries - 1) {
+        await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, i)));
+      }
+    }
+  }
+  throw lastError;
 }
 
 // Search for media by title for autocomplete
@@ -31,7 +54,7 @@ export const searchMedia = action({
 
     if (args.type === "movie") {
       try {
-        const res = await fetch(
+        const res = await fetchWithRetry(
           `${TMDB_BASE}/search/movie?api_key=${getTmdbKey()}&query=${q}&language=en-US&page=1`
         );
         if (!res.ok) {
@@ -51,7 +74,7 @@ export const searchMedia = action({
       } catch (err) { console.error("TMDB movie search error:", err); }
     } else if (args.type === "tvshow") {
       try {
-        const res = await fetch(
+        const res = await fetchWithRetry(
           `${TMDB_BASE}/search/tv?api_key=${getTmdbKey()}&query=${q}&language=en-US&page=1`
         );
         if (!res.ok) {
@@ -71,7 +94,7 @@ export const searchMedia = action({
       } catch (err) { console.error("TMDB TV search error:", err); }
     } else if (args.type === "book") {
       try {
-        const res = await fetch(
+        const res = await fetchWithRetry(
           `${OL_BASE}/search.json?q=${q}&limit=8&fields=title,first_publish_year,cover_i`
         );
         if (!res.ok) return [];
@@ -87,9 +110,18 @@ export const searchMedia = action({
         }
       } catch (err) { console.error("OpenLibrary search error:", err); }
     } else if (args.type === "videogame" || args.type === "boardgame") {
-      // IGDB requires OAuth. For now, return empty for games so user types manually.
-      // Free alternative: search via Wikipedia or just skip.
-      return [];
+      try {
+        const res = await fetchWithRetry(
+          `${WIKI_BASE}?action=query&list=search&srsearch=${q}&format=json&origin=*&srlimit=8`
+        );
+        if (!res.ok) return [];
+        const data = await res.json();
+        if (data.query?.search) {
+          for (const r of data.query.search) {
+            results.push({ title: r.title });
+          }
+        }
+      } catch (err) { console.error("Wikipedia search error:", err); }
     }
 
     return results;
@@ -118,7 +150,7 @@ export const getGlobalRating = action({
 
     if (args.type === "movie") {
       try {
-        const res = await fetch(
+        const res = await fetchWithRetry(
           `${TMDB_BASE}/search/movie?api_key=${getTmdbKey()}&query=${q}&language=en-US&page=1`
         );
         if (!res.ok) return { globalRating: null, globalVotes: null, source: "none" };
@@ -136,7 +168,7 @@ export const getGlobalRating = action({
       } catch (err) { console.error("getGlobalRating movie:", err); }
     } else if (args.type === "tvshow") {
       try {
-        const res = await fetch(
+        const res = await fetchWithRetry(
           `${TMDB_BASE}/search/tv?api_key=${getTmdbKey()}&query=${q}&language=en-US&page=1`
         );
         if (!res.ok) return { globalRating: null, globalVotes: null, source: "none" };
@@ -153,7 +185,7 @@ export const getGlobalRating = action({
       } catch (err) { console.error("getGlobalRating tv:", err); }
     } else if (args.type === "book") {
       try {
-        const res = await fetch(
+        const res = await fetchWithRetry(
           `${OL_BASE}/search.json?q=${q}&limit=1&fields=title,ratings_average,ratings_count`
         );
         if (!res.ok) return { globalRating: null, globalVotes: null, source: "none" };

@@ -16,20 +16,16 @@ import type { MediaType, MediaEntry, WishlistItem, CurrentlyItem, LibrarySortOpt
 const StatsView = lazy(() => import("./Stats"));
 
 const CACHE_KEY = "headandheart_entries_cache";
-const CACHE_VERSION_KEY = "headandheart_cache_version";
 const WISHLIST_CACHE_KEY = "headandheart_wishlist_cache";
-const WISHLIST_CACHE_VERSION_KEY = "headandheart_wishlist_cache_version";
 const CURRENTLY_CACHE_KEY = "headandheart_currently_cache";
-const CURRENTLY_CACHE_VERSION_KEY = "headandheart_currently_cache_version";
 
 interface CacheData<T> {
   data: T[];
   timestamp: number;
-  version: number;
   filter?: string;
 }
 
-function getCached<T>(key: string, _versionKey: string): { data: T[]; filter?: string } | null {
+function getCached<T>(key: string): { data: T[]; filter?: string } | null {
   try {
     const cached = localStorage.getItem(key);
     if (!cached) return null;
@@ -39,30 +35,27 @@ function getCached<T>(key: string, _versionKey: string): { data: T[]; filter?: s
   } catch { return null; }
 }
 
-function setCached<T>(key: string, versionKey: string, data: T[], filter?: string) {
+function setCached<T>(key: string, data: T[], filter?: string) {
   try {
-    const version = parseInt(localStorage.getItem(versionKey) || "0");
-    localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now(), version, filter }));
+    localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now(), filter }));
   } catch { /* ignore */ }
 }
 
-function invalidateCacheKey(key: string, versionKey: string) {
+function invalidateCacheKey(key: string) {
   try {
-    const version = parseInt(localStorage.getItem(versionKey) || "0");
-    localStorage.setItem(versionKey, (version + 1).toString());
     localStorage.removeItem(key);
   } catch { /* ignore */ }
 }
 
-const getCachedEntries = () => getCached<MediaEntry>(CACHE_KEY, CACHE_VERSION_KEY);
-const setCachedEntries = (data: MediaEntry[], filter?: string) => setCached(CACHE_KEY, CACHE_VERSION_KEY, data, filter);
-const invalidateCache = () => invalidateCacheKey(CACHE_KEY, CACHE_VERSION_KEY);
-const getCachedWishlistItems = () => getCached<WishlistItem>(WISHLIST_CACHE_KEY, WISHLIST_CACHE_VERSION_KEY);
-const setCachedWishlistItems = (data: WishlistItem[], filter?: string) => setCached(WISHLIST_CACHE_KEY, WISHLIST_CACHE_VERSION_KEY, data, filter);
-const invalidateWishlistCache = () => invalidateCacheKey(WISHLIST_CACHE_KEY, WISHLIST_CACHE_VERSION_KEY);
-const getCachedCurrentlyItems = () => getCached<CurrentlyItem>(CURRENTLY_CACHE_KEY, CURRENTLY_CACHE_VERSION_KEY);
-const setCachedCurrentlyItems = (data: CurrentlyItem[], filter?: string) => setCached(CURRENTLY_CACHE_KEY, CURRENTLY_CACHE_VERSION_KEY, data, filter);
-const invalidateCurrentlyCache = () => invalidateCacheKey(CURRENTLY_CACHE_KEY, CURRENTLY_CACHE_VERSION_KEY);
+const getCachedEntries = () => getCached<MediaEntry>(CACHE_KEY);
+const setCachedEntries = (data: MediaEntry[], filter?: string) => setCached(CACHE_KEY, data, filter);
+const invalidateCache = () => invalidateCacheKey(CACHE_KEY);
+const getCachedWishlistItems = () => getCached<WishlistItem>(WISHLIST_CACHE_KEY);
+const setCachedWishlistItems = (data: WishlistItem[], filter?: string) => setCached(WISHLIST_CACHE_KEY, data, filter);
+const invalidateWishlistCache = () => invalidateCacheKey(WISHLIST_CACHE_KEY);
+const getCachedCurrentlyItems = () => getCached<CurrentlyItem>(CURRENTLY_CACHE_KEY);
+const setCachedCurrentlyItems = (data: CurrentlyItem[], filter?: string) => setCached(CURRENTLY_CACHE_KEY, data, filter);
+const invalidateCurrentlyCache = () => invalidateCacheKey(CURRENTLY_CACHE_KEY);
 
 const Icons = {
   logo: (
@@ -413,7 +406,7 @@ function StatsLoader({
   useEffect(() => {
     if (entries) {
       const typedEntries = entries as MediaEntry[];
-      setCachedEntries(typedEntries, undefined);
+      setCachedEntries(typedEntries);
       onEntriesUpdate(typedEntries, undefined);
     }
   }, [entries, onEntriesUpdate]);
@@ -637,7 +630,18 @@ function SignInForm() {
           const formData = new FormData(e.target as HTMLFormElement);
           formData.set("flow", flow);
           void signIn("password", formData)
-            .catch((error: Error) => setError(error.message))
+            .catch((error: Error) => {
+              const msg = error.message;
+              if (msg === "InvalidAccountId" || msg.includes("Invalid credentials")) {
+                setError("No account found with that email.");
+              } else if (msg === "InvalidSecret") {
+                setError("Incorrect password.");
+              } else if (msg === "TooManyFailedAttempts") {
+                setError("Too many attempts. Please try again later.");
+              } else {
+                setError(msg);
+              }
+            })
             .finally(() => setLoading(false));
         }}
       >
@@ -700,9 +704,21 @@ function Content({
 
   const tf = typeFilter === "all" ? undefined : typeFilter;
 
-  const entries = useQuery(api.mediaEntries.getMediaEntries, { typeFilter: tf });
-  const wishlistItems = useQuery(api.wishlist.getWishlistItems, { typeFilter: tf });
-  const currentlyItemsQuery = useQuery(api.currently.getCurrentlyItems, { typeFilter: tf });
+  const entries = useQuery(
+    // @ts-expect-error - Convex "skip" pattern not in TS types
+    mode === "library" ? api.mediaEntries.getMediaEntries : "skip",
+    mode === "library" ? { typeFilter: tf } : "skip"
+  );
+  const wishlistItems = useQuery(
+    // @ts-expect-error - Convex "skip" pattern not in TS types
+    mode === "wishlist" ? api.wishlist.getWishlistItems : "skip",
+    mode === "wishlist" ? { typeFilter: tf } : "skip"
+  );
+  const currentlyItemsQuery = useQuery(
+    // @ts-expect-error - Convex "skip" pattern not in TS types
+    mode === "currently" ? api.currently.getCurrentlyItems : "skip",
+    mode === "currently" ? { typeFilter: tf } : "skip"
+  );
 
   useEffect(() => {
     if (entries) {
@@ -1424,6 +1440,7 @@ function CurrentlyModal({ item, initialType, onClose }: { item?: CurrentlyItem; 
   );
   const [progress, setProgress] = useState(item?.progress ?? 0);
   const [totalPages, setTotalPages] = useState(item?.totalPages ?? 0);
+  const [totalEpisodes, setTotalEpisodes] = useState(item?.totalEpisodes ?? 0);
   const [notes, setNotes] = useState(item?.notes ?? "");
   const [loading, setLoading] = useState(false);
   const [bulkMode, setBulkMode] = useState(false);
@@ -1431,7 +1448,9 @@ function CurrentlyModal({ item, initialType, onClose }: { item?: CurrentlyItem; 
 
   const isEditing = !!item;
   const isBook = type === "book" && totalPages > 0;
-  const effectiveProgress = isBook ? Math.min(100, Math.round((progress / totalPages) * 100)) : progress;
+  const isTV = type === "tvshow" && totalEpisodes > 0;
+  const trackedTotal = isBook ? totalPages : isTV ? totalEpisodes : 0;
+  const effectiveProgress = (isBook || isTV) ? Math.min(100, Math.round((progress / trackedTotal) * 100)) : progress;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1440,6 +1459,7 @@ function CurrentlyModal({ item, initialType, onClose }: { item?: CurrentlyItem; 
     try {
       const payload: Record<string, unknown> = { title: title.trim(), type, dateStarted: new Date(dateStarted).getTime(), progress, notes: notes.trim() || undefined };
       if (type === "book" && totalPages > 0) payload.totalPages = totalPages;
+      if (type === "tvshow" && totalEpisodes > 0) payload.totalEpisodes = totalEpisodes;
       if (isEditing) {
         await updateItem({ id: item._id, ...payload } as Parameters<typeof updateItem>[0]);
       } else {
@@ -1461,6 +1481,7 @@ function CurrentlyModal({ item, initialType, onClose }: { item?: CurrentlyItem; 
     try {
       const itemPayload: Record<string, unknown> = { title: "", type, dateStarted: new Date(dateStarted).getTime(), progress, notes: notes.trim() || undefined };
       if (type === "book" && totalPages > 0) itemPayload.totalPages = totalPages;
+      if (type === "tvshow" && totalEpisodes > 0) itemPayload.totalEpisodes = totalEpisodes;
       await bulkAdd({
         items: lines.map(title => ({ ...itemPayload, title })),
       } as Parameters<typeof bulkAdd>[0]);
@@ -1503,15 +1524,17 @@ function CurrentlyModal({ item, initialType, onClose }: { item?: CurrentlyItem; 
                 onChange={(e) => setDateStarted(e.target.value)}
               />
             </div>
-            {type === "book" ? (
+            {type === "book" || type === "tvshow" ? (
               <div>
-                <label className="text-sm opacity-70">Page progress</label>
+                <label className="text-sm opacity-70">
+                  {type === "book" ? "Page progress" : "Episode progress"}
+                </label>
                 <div className="flex gap-2 items-center">
-                  <input className="input flex-1" type="number" min="0" value={progress || ""} onChange={(e) => setProgress(Number(e.target.value))} placeholder="Page" />
+                  <input className="input flex-1" type="number" min="0" value={progress || ""} onChange={(e) => setProgress(Number(e.target.value))} placeholder={type === "book" ? "Page" : "Ep"} />
                   <span className="opacity-40 text-sm">/</span>
-                  <input className="input flex-1" type="number" min="1" value={totalPages || ""} onChange={(e) => setTotalPages(Number(e.target.value))} placeholder="Total" />
+                  <input className="input flex-1" type="number" min="1" value={type === "book" ? (totalPages || "") : (totalEpisodes || "")} onChange={(e) => type === "book" ? setTotalPages(Number(e.target.value)) : setTotalEpisodes(Number(e.target.value))} placeholder="Total" />
                 </div>
-                {totalPages > 0 && (
+                {trackedTotal > 0 && (
                   <div className="progress-bar mt-2">
                     <div className="progress-fill" style={{ width: `${effectiveProgress}%` }} />
                   </div>
@@ -1567,9 +1590,11 @@ function CurrentlyModal({ item, initialType, onClose }: { item?: CurrentlyItem; 
               />
             </div>
             <MediaSearchAutocomplete type={type} value={title} onChange={setTitle} />
-            {type === "book" ? (
+            {type === "book" || type === "tvshow" ? (
               <div>
-                <label className="text-sm opacity-70">Page progress</label>
+                <label className="text-sm opacity-70">
+                  {type === "book" ? "Page progress" : "Episode progress"}
+                </label>
                 <div className="flex gap-2 items-center">
                   <input
                     className="input flex-1"
@@ -1577,19 +1602,19 @@ function CurrentlyModal({ item, initialType, onClose }: { item?: CurrentlyItem; 
                     min="0"
                     value={progress || ""}
                     onChange={(e) => setProgress(Number(e.target.value))}
-                    placeholder="Page"
+                    placeholder={type === "book" ? "Page" : "Ep"}
                   />
                   <span className="opacity-40 text-sm">/</span>
                   <input
                     className="input flex-1"
                     type="number"
                     min="1"
-                    value={totalPages || ""}
-                    onChange={(e) => setTotalPages(Number(e.target.value))}
+                    value={type === "book" ? (totalPages || "") : (totalEpisodes || "")}
+                    onChange={(e) => type === "book" ? setTotalPages(Number(e.target.value)) : setTotalEpisodes(Number(e.target.value))}
                     placeholder="Total"
                   />
                 </div>
-                {totalPages > 0 && (
+                {trackedTotal > 0 && (
                   <div className="progress-bar mt-2">
                     <div className="progress-fill" style={{ width: `${effectiveProgress}%` }} />
                   </div>
@@ -1977,11 +2002,16 @@ function CurrentlyCard({
   });
 
   const isBookTracked = item.type === "book" && item.totalPages != null && item.totalPages > 0;
+  const isTVTracked = item.type === "tvshow" && item.totalEpisodes != null && item.totalEpisodes > 0;
   const displayProgress = isBookTracked
     ? Math.min(100, Math.round((item.progress / item.totalPages!) * 100))
+    : isTVTracked
+    ? Math.min(100, Math.round((item.progress / item.totalEpisodes!) * 100))
     : item.progress;
   const progressLabel = isBookTracked
     ? `${item.progress} / ${item.totalPages} pages`
+    : isTVTracked
+    ? `E${item.progress} / ${item.totalEpisodes} eps`
     : `${item.progress}%`;
 
   const handleDemote = async () => {

@@ -18,6 +18,7 @@ export const addCurrentlyItem = mutation({
     progress: v.number(),
     notes: v.optional(v.string()),
     totalPages: v.optional(v.number()),
+    totalEpisodes: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -30,6 +31,7 @@ export const addCurrentlyItem = mutation({
       progress: args.progress,
       notes: args.notes,
       totalPages: args.totalPages,
+      totalEpisodes: args.totalEpisodes,
     });
   },
 });
@@ -41,14 +43,19 @@ export const getCurrentlyItems = query({
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return [];
-    let items = await ctx.db
+    if (args.typeFilter) {
+      const type = args.typeFilter;
+      return await ctx.db
+        .query("currentlyItems")
+        .withIndex("by_user_and_type", (q) =>
+          q.eq("userId", userId).eq("type", type)
+        )
+        .collect();
+    }
+    return await ctx.db
       .query("currentlyItems")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
-    if (args.typeFilter) {
-      items = items.filter((item) => item.type === args.typeFilter);
-    }
-    return items;
   },
 });
 
@@ -61,6 +68,7 @@ export const updateCurrentlyItem = mutation({
     progress: v.optional(v.number()),
     notes: v.optional(v.string()),
     totalPages: v.optional(v.number()),
+    totalEpisodes: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -75,6 +83,7 @@ export const updateCurrentlyItem = mutation({
     if (args.progress !== undefined) updates.progress = args.progress;
     if (args.notes !== undefined) updates.notes = args.notes;
     if (args.totalPages !== undefined) updates.totalPages = args.totalPages;
+    if (args.totalEpisodes !== undefined) updates.totalEpisodes = args.totalEpisodes;
     await ctx.db.patch("currentlyItems", args.id, updates);
   },
 });
@@ -168,6 +177,7 @@ export const bulkAddCurrentlyItems = mutation({
       progress: v.number(),
       notes: v.optional(v.string()),
       totalPages: v.optional(v.number()),
+      totalEpisodes: v.optional(v.number()),
     })),
   },
   handler: async (ctx, args) => {
@@ -183,6 +193,7 @@ export const bulkAddCurrentlyItems = mutation({
         progress: item.progress,
         notes: item.notes,
         totalPages: item.totalPages,
+        totalEpisodes: item.totalEpisodes,
       });
       ids.push(id);
     }

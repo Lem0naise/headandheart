@@ -23,7 +23,9 @@ export default defineSchema({
         heartRating: v.number(), // 1-5 emotional satisfaction
         dateWatched: v.number(), // timestamp
         notes: v.optional(v.string()),
-    }).index("by_user", ["userId"]),
+    })
+        .index("by_user", ["userId"])
+        .index("by_user_and_type", ["userId", "type"]),
 
     // Wishlist items (no ratings yet)
     wishlistItems: defineTable({
@@ -38,7 +40,9 @@ export default defineSchema({
         ),
         dateAdded: v.number(), // timestamp
         notes: v.optional(v.string()),
-    }).index("by_user", ["userId"]),
+    })
+        .index("by_user", ["userId"])
+        .index("by_user_and_type", ["userId", "type"]),
 
     // Currently reading/watching/playing items
     currentlyItems: defineTable({
@@ -52,8 +56,11 @@ export default defineSchema({
             v.literal("boardgame")
         ),
         dateStarted: v.number(), // timestamp
-        progress: v.number(), // 0-100 percentage, or current page when totalPages set
+        progress: v.number(), // 0-100 percentage, or current page/episode when tracked
         notes: v.optional(v.string()),
         totalPages: v.optional(v.number()), // for books: total page count
-    }).index("by_user", ["userId"]),
+        totalEpisodes: v.optional(v.number()), // for TV shows: total episode count
+    })
+        .index("by_user", ["userId"])
+        .index("by_user_and_type", ["userId", "type"]),
 });

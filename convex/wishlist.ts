@@ -45,16 +45,20 @@ export const getWishlistItems = query({
       return [];
     }
 
-    let items = await ctx.db
+    if (args.typeFilter) {
+      const type = args.typeFilter;
+      return await ctx.db
+        .query("wishlistItems")
+        .withIndex("by_user_and_type", (q) =>
+          q.eq("userId", userId).eq("type", type)
+        )
+        .collect();
+    }
+
+    return await ctx.db
       .query("wishlistItems")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
-
-    if (args.typeFilter) {
-      items = items.filter((item) => item.type === args.typeFilter);
-    }
-
-    return items;
   },
 });
 

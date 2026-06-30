@@ -28,6 +28,7 @@ export interface CurrentlyItem {
   progress: number;
   notes?: string;
   totalPages?: number;
+  totalEpisodes?: number;
 }
 
 export type LibrarySortOption = "dateNewest" | "dateOldest" | "alphaAZ" | "alphaZA" | "rating";
