@@ -176,16 +176,26 @@ function TasteGalaxy({ entries }: { entries: MediaEntry[] }) {
                 {grid.map((row, rIndex) => (
                     row.map((count, cIndex) => {
                         const intensity = maxCount > 0 ? count / maxCount : 0;
-                        // Generate color from transparent to heavy primary
-                        // Using HSLA for easy opacity
+                        const avgRating = ((5 - rIndex) + (cIndex + 1)) / 2;
+                        const hue = (avgRating / 5) * 120;
+                        const emptyStyle =
+                            count === 0
+                                ? {
+                                      backgroundColor: "rgba(15, 0, 5, 0.12)",
+                                      color: "rgba(255,255,255,0.10)",
+                                  }
+                                : {
+                                      backgroundColor: `hsl(${hue}, 55%, ${20 + intensity * 25}%)`,
+                                      color:
+                                          intensity > 0.5
+                                              ? "#fff"
+                                              : "rgba(255,255,255,0.5)",
+                                  };
                         return (
                             <div
                                 key={`${rIndex}-${cIndex}`}
                                 className="border border-black/5 rounded-sm flex items-center justify-center text-xs font-bold relative group"
-                                style={{
-                                    backgroundColor: `rgba(232, 164, 201, ${intensity})`, // color-primary base
-                                    color: intensity > 0.5 ? '#2d2a32' : 'rgba(0,0,0,0.3)'
-                                }}
+                                style={emptyStyle}
                             >
                                 {count > 0 && count}
 
