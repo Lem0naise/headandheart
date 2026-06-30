@@ -35,42 +35,38 @@ export default function StatsView({ entries, onBack }: StatsProps) {
                 </div>
             </Section>
 
-            {/* 2. Divergence Score */}
-            <Section title="2. The Divergence Score">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <StatCard title="Cold Masterpieces" subtitle="(High Head, Low Heart)" entries={stats.coldMasterpieces} />
-                    <StatCard title="Shameless Loves" subtitle="(Low Head, High Heart)" entries={stats.shamelessLoves} />
-                    <StatCard title="Perfect Harmony" subtitle="(Head = Heart)" entries={stats.perfectHarmony.slice(0, 5)} moreCount={stats.perfectHarmony.length - 5} />
-                </div>
-            </Section>
-
-            {/* 3. Personality Archetypes */}
-            <Section title="3. Reviewer Archetype">
-                <div className=" bg-[var(--color-card-dark)] p-6 rounded-xl border border-[var(--color-primary)] text-center max-w-2xl mx-auto shadow-lg">
-                    <div className="text-6xl mb-4">{stats.archetype.emoji}</div>
-                    <h3 className="text-2xl font-bold mb-2">{stats.archetype.name}</h3>
-                    <p className="opacity-80 text-lg">{stats.archetype.description}</p>
-                </div>
-            </Section>
-
-            {/* 4. Media-Type Battle */}
-            <Section title="4. Media-Type Battle">
-                <div className="flex flex-col gap-6">
-                    <div className="bg-[var(--color-card)] p-2 rounded-xl border border-[var(--color-primary)] text-center max-w-2xl mx-auto shadow-lg flex flex-wrap gap-4 justify-center">
-                        {stats.mediaAverages.map((m) => (
-                            <div key={m.type} className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border border-black/10 type-${m.type} text-[var(--color-dark)]`}>
-                                <span className="uppercase">{m.type}</span>
-                                <span>(Hd {m.avgHead} / Ht {m.avgHeart})</span>
+            {/* 2. Media-Type Breakdown */}
+            <Section title="2. Media-Type Breakdown">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+                    {stats.perType.slice().sort((a, b) => b.count - a.count).map((m) => {
+                        const hue = ((m.avgRating - 1) / 4) * 120;
+                        const color = `hsl(${hue}, 50%, 38%)`;
+                        return (
+                            <div key={m.type} className="card p-4 flex flex-col gap-2 hover:scale-[1.02] transition-transform">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="font-bold uppercase text-sm tracking-wider opacity-80">{m.type}</h3>
+                                    <span className="text-xs opacity-50 tabular-nums">{m.count} entries</span>
+                                </div>
+                                <div className="text-4xl font-bold tabular-nums" style={{ color }}>
+                                    {m.avgRating.toFixed(1)}
+                                </div>
+                                <div className="flex gap-3 text-xs opacity-60">
+                                    <span>Hd {m.avgHead.toFixed(1)}</span>
+                                    <span>Ht {m.avgHeart.toFixed(1)}</span>
+                                </div>
+                                <div className="text-xs mt-1">
+                                    <span className="opacity-50">Top: </span>
+                                    <span className="font-medium truncate">{m.best || "—"}</span>
+                                </div>
                             </div>
-                        ))}
-                    </div>
-                    <p className="text-center italic opacity-70 text-sm">{stats.mediaInsight}</p>
-                    {/* Scatter Plot Visualizer */}
-                    <MediaScatterPlot entries={entries} />
+                        );
+                    })}
                 </div>
+                <p className="text-center italic opacity-70 text-sm mb-6">{stats.mediaInsight}</p>
+                <MediaScatterPlot entries={entries} />
             </Section>
 
-            {/* 5. Taste Evolution */}
+            {/* 3. Taste Evolution */}
             <Section title="5. Taste Evolution">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="card p-2">
@@ -86,33 +82,7 @@ export default function StatsView({ entries, onBack }: StatsProps) {
                 </div>
             </Section>
 
-            {/* 6. Recommendation Engine */}
-            <Section title="6. What to Watch Next">
-                <div className="bg-[var(--color-light)] p-4 rounded-lg border-l-4 border-[var(--color-accent)]">
-                    <h4 className="font-bold text-lg mb-1 text-black">Your Sweet Spot: {stats.sweetSpot.label}</h4>
-                    <p className="opacity-80 text-black">{stats.sweetSpot.description}</p>
-                </div>
-            </Section>
 
-            {/* 7. The Nerd Feature (y=x) */}
-            <Section title="7. The Nerd Feature: Δ Delta">
-                <div className="flex flex-col md:flex-row gap-8 items-center">
-                    <div className="flex-1">
-                        <div className="text-4xl font-bold mb-2">{stats.delta.toFixed(2)}</div>
-                        <p className="font-bold mb-1">Average Delta Score</p>
-                        <p className="opacity-70 text-sm mb-4">
-                            (Distance from the "Head = Heart" diagonal)
-                        </p>
-                        <p className="italic text-sm">
-                            {stats.delta < 0.7 ? "You are a very consistent rater." : stats.delta > 1.5 ? "Your head and heart are seemingly at war." : "You have a balanced perspective."}
-                        </p>
-                    </div>
-                    <div className="flex-1">
-                        <p className="mb-2"><strong>Above Line:</strong> {stats.aboveLine} items (Respect {">"} Enjoy)</p>
-                        <p className="mb-2"><strong>Below Line:</strong> {stats.belowLine} items (Enjoy {">"} Respect)</p>
-                    </div>
-                </div>
-            </Section>
         </div>
     );
 }
@@ -122,32 +92,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
         <div className="border-t border-black/10 pt-8 first:border-0 first:pt-0">
             <h2 className="text-xl font-bold mb-6 text-[var(--color-primary)] font-mono uppercase tracking-wider">{title}</h2>
             {children}
-        </div>
-    );
-}
-
-function StatCard({ title, subtitle, entries, moreCount = 0 }: { title: string; subtitle: string; entries: MediaEntry[]; moreCount?: number }) {
-    return (
-        <div className="card h-full p-2">
-            <h4 className="font-bold text-lg leading-tight">{title}</h4>
-            <p className="text-xs opacity-60 mb-3">{subtitle}</p>
-            {entries.length === 0 ? (
-                <p className="opacity-40 text-sm italic">None found yet.</p>
-            ) : (
-                <ul className="space-y-2">
-                    {entries.map(e => (
-                        <li key={e._id} className="text-sm flex justify-between items-start gap-2">
-                            <span className="font-medium truncate">{e.title}</span>
-                            <span className="text-xs whitespace-nowrap opacity-60 font-mono">
-                                {e.headRating}/{e.heartRating}
-                            </span>
-                        </li>
-                    ))}
-                    {moreCount > 0 && (
-                        <li className="text-xs opacity-50 italic">...and {moreCount} more</li>
-                    )}
-                </ul>
-            )}
         </div>
     );
 }
@@ -357,13 +301,11 @@ function useStats(entries: MediaEntry[]) {
         // 1. Hot Zone
         const counts: Record<string, number> = {};
         entries.forEach(e => {
-            // Bucket: Low (1-2), Mid (3), High (4-5) for general zone
             const hRound = Math.floor(e.headRating);
             const htRound = Math.floor(e.heartRating);
-            const key = `${hRound}-${htRound}`; // Exact cell tracking
+            const key = `${hRound}-${htRound}`;
             counts[key] = (counts[key] || 0) + 1;
         });
-        // Find mode cell
         let maxCell = "";
         let maxCount = 0;
         Object.entries(counts).forEach(([k, v]) => {
@@ -371,8 +313,7 @@ function useStats(entries: MediaEntry[]) {
         });
         const hotZone = maxCell ? `Head ${maxCell.split('-')[0]} / Heart ${maxCell.split('-')[1]}` : "N/A";
 
-        // Void Zone (quadrants logic simplified)
-        // Check which corner is empty
+        // Void Zone
         const corners = { tl: 0, tr: 0, bl: 0, br: 0 };
         entries.forEach(e => {
             if (e.headRating >= 3 && e.heartRating <= 2) corners.tl++;
@@ -385,84 +326,26 @@ function useStats(entries: MediaEntry[]) {
             .map(([k]) => k === 'tl' ? 'Academic' : k === 'tr' ? 'Masterpiece' : k === 'bl' ? 'Trash' : 'Guilty Pleasure')
             .join(", ") || "None (Well Traveled)";
 
-        // 2. Divergence
-        const coldMasterpieces = entries
-            .filter(e => e.headRating >= 4 && e.heartRating <= 2)
-            .sort((a, b) => b.headRating - a.headRating);
-
-        const shamelessLoves = entries
-            .filter(e => e.headRating <= 2 && e.heartRating >= 4)
-            .sort((a, b) => b.heartRating - a.heartRating);
-
-        const perfectHarmony = entries
-            .filter(e => Math.abs(e.headRating - e.heartRating) < 0.5)
-            .sort((a, b) => b.headRating - a.headRating); // Top favorities
-
-        // 3. Archetype
-        // Centroid (Center of Mass)
-        const avgHead = entries.reduce((s, e) => s + e.headRating, 0) / entries.length;
-        const avgHeart = entries.reduce((s, e) => s + e.heartRating, 0) / entries.length;
-
-        let archetype = { name: "Chaotic Neutral", emoji: "🎲", description: "Your taste is unpredictable and spans every corner of the grid." };
-        if (avgHead > 3.5 && avgHeart < 3) archetype = { name: "The Academic", emoji: "🧐", description: "You value craft over everything. If the lighting is bad, you're out." };
-        else if (avgHead < 3 && avgHeart > 3.5) archetype = { name: "The Golden Retriever", emoji: "🦮", description: "You just want to be happy. Plot holes? Who cares!" };
-        else if (avgHead > 3.8 && avgHeart > 3.8) archetype = { name: "The Unicorn", emoji: "🦄", description: "You have incredibly high standards and only log things that are perfect in both ways." };
-
-        // 4. Media Battle
+        // 2. Media Breakdown
         const types = Array.from(new Set(entries.map(e => e.type)));
-        const mediaAverages = types.map(t => {
+        const perType = types.map(t => {
             const subset = entries.filter(e => e.type === t);
-            return {
-                type: t,
-                avgHead: (subset.reduce((s, e) => s + e.headRating, 0) / subset.length).toFixed(1),
-                avgHeart: (subset.reduce((s, e) => s + e.heartRating, 0) / subset.length).toFixed(1),
-            };
+            if (subset.length === 0) return { type: t, count: 0, avgHead: 0, avgHeart: 0, avgRating: 0, best: null as string | null };
+            const sumHd = subset.reduce((s, e) => s + e.headRating, 0);
+            const sumHt = subset.reduce((s, e) => s + e.heartRating, 0);
+            const avgH = sumHd / subset.length;
+            const avgHt = sumHt / subset.length;
+            const best = subset.reduce((a, b) =>
+                (a.headRating + a.heartRating) >= (b.headRating + b.heartRating) ? a : b
+            );
+            return { type: t, count: subset.length, avgHead: avgH, avgHeart: avgHt, avgRating: (avgH + avgHt) / 2, best: best.title };
         });
-        // Simple insight
-        const sortedByHead = [...mediaAverages].sort((a, b) => parseFloat(b.avgHead) - parseFloat(a.avgHead));
-        const mediaInsight = `You tend to be most critical of ${sortedByHead[0]?.type}s and most forgiving of ${sortedByHead[sortedByHead.length - 1]?.type}s.`;
+        const sortedByHead = [...perType].sort((a, b) => a.avgHead - b.avgHead);
+        const mediaInsight = sortedByHead.length > 0
+            ? `You tend to be most critical of ${sortedByHead[0]?.type}s and most forgiving of ${sortedByHead[sortedByHead.length - 1]?.type}s.`
+            : "Not enough data yet.";
 
-        // 6. Recommendation ("Sweet Spot" is the centroid)
-        const roundedHead = Math.round(avgHead);
-        const roundedHeart = Math.round(avgHeart);
-        // Logic for strings
-        let recDesc = "You generally like things balanced.";
-        if (roundedHead >= 4 && roundedHeart >= 4) recDesc = "You only really love the best of the best. Stick to award winners.";
-        else if (roundedHeart > roundedHead + 1) recDesc = "You prefer fun over form. Look for cult classics and crowd pleasers.";
-        else if (roundedHead > roundedHeart + 1) recDesc = "You prefer intellectual stimulation. Look for documentaries or complex dramas.";
-
-        const sweetSpot = {
-            label: `Head ${roundedHead} / Heart ${roundedHeart}`,
-            description: `You tend to be happiest with items around this score. ${recDesc}`
-        };
-
-        // 7. Y=X (Delta)
-        let sumDelta = 0;
-        let above = 0;
-        let below = 0;
-        entries.forEach(e => {
-            const diff = Math.abs(e.headRating - e.heartRating);
-            sumDelta += diff;
-            if (e.headRating > e.heartRating) above++;
-            if (e.heartRating > e.headRating) below++;
-        });
-        const delta = sumDelta / entries.length;
-
-        return {
-            hotZone,
-            voidZone,
-            coldMasterpieces,
-            shamelessLoves,
-            perfectHarmony,
-            archetype,
-            mediaAverages,
-            mediaInsight,
-            sweetSpot,
-            delta,
-            aboveLine: above,
-            belowLine: below,
-        };
-
+        return { hotZone, voidZone, perType, mediaInsight };
     }, [entries]);
 }
 
@@ -470,15 +353,7 @@ function getEmptyStats() {
     return {
         hotZone: "N/A",
         voidZone: "All",
-        coldMasterpieces: [],
-        shamelessLoves: [],
-        perfectHarmony: [],
-        archetype: { name: "The Blank Slate", emoji: "📄", description: "Start rating things to see your archetype!" },
-        mediaAverages: [],
+        perType: [] as { type: string; count: number; avgHead: number; avgHeart: number; avgRating: number; best: string | null }[],
         mediaInsight: "Not enough data yet.",
-        sweetSpot: { label: "Unknown", description: "Rate more items to find out." },
-        delta: 0,
-        aboveLine: 0,
-        belowLine: 0
     };
 }
