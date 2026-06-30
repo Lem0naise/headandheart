@@ -192,26 +192,14 @@ body {
 }
 
 /* Grid layout — responsive */
-@media (max-width: 479px) {
-  .entries-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    width: 100%;
-  }
-}
-
-@media (min-width: 480px) and (max-width: 767px) {
-  .entries-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.75rem;
-  }
+.entries-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.75rem;
 }
 
 @media (min-width: 768px) {
   .entries-grid {
-    display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: 1rem;
   }
@@ -232,11 +220,6 @@ body {
 
 /* Mobile / tablet card sizing */
 @media (max-width: 767px) {
-  .entry-card {
-    width: 100%;
-    max-width: 100%;
-  }
-
   .entry-title {
     font-size: 1.3rem;
     word-break: break-word;

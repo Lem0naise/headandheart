@@ -177,25 +177,22 @@ function TasteGalaxy({ entries }: { entries: MediaEntry[] }) {
                     row.map((count, cIndex) => {
                         const intensity = maxCount > 0 ? count / maxCount : 0;
                         const avgRating = ((5 - rIndex) + (cIndex + 1)) / 2;
-                        const hue = (avgRating / 5) * 120;
-                        const emptyStyle =
+                        const hue = ((avgRating - 1) / 4) * 120;
+                        const cellStyle =
                             count === 0
                                 ? {
-                                      backgroundColor: "rgba(15, 0, 5, 0.12)",
-                                      color: "rgba(255,255,255,0.10)",
+                                      backgroundColor: "rgba(255,255,255,0.03)",
+                                      color: "rgba(255,255,255,0.08)",
                                   }
                                 : {
-                                      backgroundColor: `hsl(${hue}, 55%, ${20 + intensity * 25}%)`,
-                                      color:
-                                          intensity > 0.5
-                                              ? "#fff"
-                                              : "rgba(255,255,255,0.5)",
+                                      backgroundColor: `hsl(${hue}, ${40 + intensity * 20}%, ${20 + intensity * 25}%)`,
+                                      color: intensity > 0.4 ? "#fff" : "rgba(255,255,255,0.45)",
                                   };
                         return (
                             <div
                                 key={`${rIndex}-${cIndex}`}
                                 className="border border-black/5 rounded-sm flex items-center justify-center text-xs font-bold relative group"
-                                style={emptyStyle}
+                                style={cellStyle}
                             >
                                 {count > 0 && count}
 

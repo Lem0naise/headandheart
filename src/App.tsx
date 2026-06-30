@@ -1777,7 +1777,10 @@ function RatingGrid({
 }
 
 function getRatingColor(score: number) {
-  return `hsl(${(score / 5) * 300 - 180}, ${(score / 5) * 30 + 10}%, ${(score / 5) * 30 + 10}%)`;
+  const hue = ((score - 1) / 4) * 120;
+  const sat = 35 + (score / 5) * 25;
+  const lit = 30 + (score / 5) * 15;
+  return `hsl(${hue}, ${sat}%, ${lit}%)`;
 }
 
 function WishlistCard({
