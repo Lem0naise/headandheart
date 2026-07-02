@@ -722,7 +722,6 @@ body {
   background: linear-gradient(90deg, var(--color-secondary) 0%, var(--color-primary) 100%);
   outline: none;
   cursor: pointer;
-  width: 100px;
 }
 
 .slider::-webkit-slider-thumb {

@@ -14,6 +14,7 @@ import { useState, useMemo, useEffect, useRef, useCallback, lazy, Suspense, type
 import type { MediaType, MediaEntry, WishlistItem, CurrentlyItem, LibrarySortOption, WishlistSortOption, CurrentlySortOption, AppMode } from "./types";
 
 const StatsView = lazy(() => import("./Stats"));
+const ExportModal = lazy(() => import("./ExportModal"));
 
 const CACHE_KEY = "headandheart_entries_cache";
 const WISHLIST_CACHE_KEY = "headandheart_wishlist_cache";
@@ -555,11 +556,11 @@ function Header({
                   className="dropdown-item"
                   onClick={() => {
                     setMenuOpen(false);
-                    window.dispatchEvent(new CustomEvent("exportCSV"));
+                    window.dispatchEvent(new CustomEvent("openExportModal"));
                   }}
                 >
-                  {Icons.upload}
-                  <span style={{ transform: 'rotate(180deg)' }}>Export</span>
+                  <span style={{ transform: 'rotate(180deg)', display: 'inline-block' }}>{Icons.upload}</span>
+                  <span>Export</span>
                 </button>
                 <div className="dropdown-divider" />
                 <button
@@ -690,6 +691,7 @@ function Content({
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showExport, setShowExport] = useState(false);
   const [editingEntry, setEditingEntry] = useState<MediaEntry | null>(null);
   const [editingWishlist, setEditingWishlist] = useState<WishlistItem | null>(null);
   const [editingCurrently, setEditingCurrently] = useState<CurrentlyItem | null>(null);
@@ -733,6 +735,7 @@ function Content({
   useEffect(() => {
     setShowAddForm(false);
     setShowImport(false);
+    setShowExport(false);
     setEditingEntry(null);
     setEditingWishlist(null);
     setEditingCurrently(null);
@@ -747,6 +750,12 @@ function Content({
     window.addEventListener("openImportModal", handler as EventListener);
     return () => window.removeEventListener("openImportModal", handler as EventListener);
   }, [isWishlist]);
+
+  useEffect(() => {
+    const handler = () => setShowExport(true);
+    window.addEventListener("openExportModal", handler as EventListener);
+    return () => window.removeEventListener("openExportModal", handler as EventListener);
+  }, []);
 
   useEffect(() => {
     if (wishlistItems) {
@@ -845,34 +854,6 @@ function Content({
     : currentlyItemsQuery === undefined && !currentlyDisplayItems;
 
   const displayCount = isLibrary ? sortedLibraryEntries.length : isWishlist ? sortedWishlistItems.length : sortedCurrentlyItems.length;
-
-  const exportEntriesRef = useRef<MediaEntry[] | null>(null);
-  useEffect(() => { exportEntriesRef.current = libraryDisplayEntries; }, [libraryDisplayEntries]);
-
-  useEffect(() => {
-    const handler = () => {
-      const entriesToExport = exportEntriesRef.current ?? [];
-      if (entriesToExport.length === 0) return;
-      const header = "title,type,rating,dateWatched,notes,status";
-      const rows = entriesToExport.map(e => {
-        const rating = Math.round(((e.headRating + e.heartRating) / 10) * 100);
-        const date = new Date(e.dateWatched).toISOString().split("T")[0];
-        const notes = e.notes ? `"${e.notes.replace(/"/g, '""')}"` : "";
-        const title = `"${e.title.replace(/"/g, '""')}"`;
-        return `${title},${e.type},${rating},${date},${notes},rated`;
-      });
-      const csv = [header, ...rows].join("\n");
-      const blob = new Blob([csv], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `headandheart-export-${new Date().toISOString().split("T")[0]}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    };
-    window.addEventListener("exportCSV", handler as EventListener);
-    return () => window.removeEventListener("exportCSV", handler as EventListener);
-  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -985,6 +966,16 @@ function Content({
       {editingWishlist && isWishlist && <WishlistModal item={editingWishlist} onClose={() => setEditingWishlist(null)} />}
       {editingCurrently && isCurrently && <CurrentlyModal item={editingCurrently} onClose={() => setEditingCurrently(null)} />}
       {completingItem && <CompleteModal item={completingItem} onClose={() => setCompletingItem(null)} />}
+      {showExport && (
+        <Suspense fallback={null}>
+          <ExportModal
+            libraryEntries={libraryDisplayEntries}
+            wishlistItems={wishlistDisplayItems}
+            currentlyItems={currentlyDisplayItems}
+            onClose={() => setShowExport(false)}
+          />
+        </Suspense>
+      )}
 
       {!isLoading && displayCount === 0 ? (
         <div className="empty-state">
