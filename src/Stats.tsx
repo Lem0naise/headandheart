@@ -1,4 +1,6 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useAction } from "convex/react";
+import { api } from "../convex/_generated/api";
 import type { MediaEntry } from "./types";
 
 interface StatsProps {
@@ -8,92 +10,184 @@ interface StatsProps {
 
 export default function StatsView({ entries, onBack }: StatsProps) {
     const stats = useStats(entries);
+    const worldComparison = useWorldComparison(entries);
 
     return (
-        <div className="flex flex-col gap-8 pb-12 animate-in">
-            <div className="flex items-center gap-4 mb-2">
-                <button onClick={onBack} className="btn btn-ghost">
-                    ← Back
-                </button>
-                <h1 className="text-3xl font-bold">Taste Analysis</h1>
-            </div>
-
-            {/* 1. Taste Galaxy (Heatmap) */}
-            <Section title="1. The Taste Heatmap">
-                <p className="opacity-70 mb-4 text-sm max-w-2xl">
-                    A visual map of where your ratings land. Lighter squares mean more entries.
-                    <br />
-                    <span className="text-xs">Top-Left: Academic · Bottom-Right: Guilty Pleasure · Top-Right: Masterpiece</span>
-                </p>
-                <div className="flex flex-col md:flex-row gap-8 items-center">
-                    <TasteGalaxy entries={entries} />
-                    <div className="text-sm opacity-80 max-w-sm">
-                        <h4 className="font-bold mb-1">Analysis</h4>
-                        <p className="mb-2"><strong>Hot Zone:</strong> {stats.hotZone}</p>
-                        <p><strong>The Void:</strong> {stats.voidZone}</p>
-                    </div>
+        <div className="flex flex-col gap-6 pb-12 animate-in">
+            <section className="page-sheet">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                    <h1 className="text-4xl">Taste Stats</h1>
+                    <button onClick={onBack} className="btn btn-ghost">← Back</button>
                 </div>
-            </Section>
+                <div className="stats-grid mt-6">
+                    <StatCard label="Logged" value={stats.total.toString()} detail="entries" />
+                    <StatCard label="Average" value={stats.averageRating.toFixed(1)} detail="out of 5" />
+                    <StatCard label="Top type" value={stats.topTypeLabel} detail={`${stats.topTypeCount} logged`} />
+                    <StatCard label="Streak" value={`${stats.currentStreak}`} detail="days" />
+                    <StatCard label="Types" value={`${stats.typeCount}`} detail="kinds" />
+                </div>
+            </section>
 
-            {/* 2. Media-Type Breakdown */}
-            <Section title="2. Media-Type Breakdown">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-                    {stats.perType.slice().sort((a, b) => b.count - a.count).map((m) => {
-                        const hue = ((m.avgRating - 1) / 4) * 120;
-                        const color = `hsl(${hue}, 50%, 38%)`;
-                        return (
-                            <div key={m.type} className="card p-4 flex flex-col gap-2 hover:scale-[1.02] transition-transform">
-                                <div className="flex items-center justify-between">
-                                    <h3 className="font-bold uppercase text-sm tracking-wider opacity-80">{m.type}</h3>
-                                    <span className="text-xs opacity-50 tabular-nums">{m.count} entries</span>
-                                </div>
-                                <div className="text-4xl font-bold tabular-nums" style={{ color }}>
-                                    {m.avgRating.toFixed(1)}
-                                </div>
-                                <div className="flex gap-3 text-xs opacity-60">
-                                    <span>Hd {m.avgHead.toFixed(1)}</span>
-                                    <span>Ht {m.avgHeart.toFixed(1)}</span>
-                                </div>
-                                <div className="text-xs mt-1">
-                                    <span className="opacity-50">Top: </span>
-                                    <span className="font-medium truncate">{m.best || "—"}</span>
+            {entries.length === 0 ? (
+                <div className="empty-state">
+                    <p className="empty-line">No stats yet.</p>
+                    <p className="empty-sub">Log a finished title first.</p>
+                </div>
+            ) : (
+                <>
+                    <Section title="Head & Heart">
+                        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto] gap-6 items-center">
+                            <div>
+                                <h3 className="stats-section-title">{stats.personality.title}</h3>
+                                <div className="mt-5 flex items-center gap-3">
+                                    <span className="text-4xl" aria-hidden="true">{stats.personality.icon}</span>
+                                    <div>
+                                        <p className="font-bold">Head {stats.averageHead.toFixed(1)} · Heart {stats.averageHeart.toFixed(1)}</p>
+                                        <p className="margin-note">{stats.headHeartInsight}</p>
+                                    </div>
                                 </div>
                             </div>
-                        );
-                    })}
-                </div>
-                <p className="text-center italic opacity-70 text-sm mb-6">{stats.mediaInsight}</p>
-                <MediaScatterPlot entries={entries} />
-            </Section>
+                            <TasteGalaxy entries={entries} />
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5 text-sm">
+                            <p className="margin-note">Most common: {stats.hotZone}</p>
+                            <p className="margin-note">Empty corners: {stats.voidZone}</p>
+                        </div>
+                    </Section>
 
-            {/* 3. Taste Evolution */}
-            <Section title="5. Taste Evolution">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="card p-2">
-                        <h4 className="font-bold mb-2">The "Snobbery" Index</h4>
-                        <p className="text-sm opacity-70 mb-4">Average Head rating over time</p>
-                        <TrendLine entries={entries} field="headRating" color="var(--color-secondary)" />
-                    </div>
-                    <div className="card p-2">
-                        <h4 className="font-bold mb-2">The "Softening" Index</h4>
-                        <p className="text-sm opacity-70 mb-4">Percentage of "Heart: 5" ratings over time</p>
-                        <TrendLine entries={entries} field="heartRating" color="var(--color-primary)" isPercentage5={true} />
-                    </div>
-                </div>
-            </Section>
+                    <Section title="Ratings">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <RatingDistribution title="Head" counts={stats.headDistribution} color="var(--color-secondary)" />
+                            <RatingDistribution title="Heart" counts={stats.heartDistribution} color="var(--color-primary)" />
+                        </div>
+                    </Section>
 
+                    <Section title="By Type">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                            {stats.perType.slice().sort((a, b) => b.count - a.count).map((media) => (
+                                <div key={media.type}>
+                                    <div className="flex items-baseline justify-between gap-3">
+                                        <h3 className="stats-section-title capitalize">{friendlyType(media.type)}</h3>
+                                        <span className="text-sm opacity-60">{media.count} logged</span>
+                                    </div>
+                                    <p className="margin-note">Top: {media.best ?? "—"}</p>
+                                    <div className="mt-4 grid grid-cols-[3.5rem_1fr] gap-3 text-sm items-center">
+                                        <span>Head {media.avgHead.toFixed(1)}</span>
+                                        <div className="chart-bar-track"><div className="chart-bar-fill" style={{ width: `${media.avgHead * 20}%`, background: "var(--color-secondary)" }} /></div>
+                                        <span>Heart {media.avgHeart.toFixed(1)}</span>
+                                        <div className="chart-bar-track"><div className="chart-bar-fill" style={{ width: `${media.avgHeart * 20}%`, background: "var(--color-primary)" }} /></div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </Section>
 
+                    <Section title="Favorites">
+                        <div className="favorites-list">
+                            {stats.favorites.map((entry, index) => (
+                                <div className="favorite-item" key={entry._id}>
+                                    <span className="favorite-rank">{index + 1}</span>
+                                    {entry.posterUrl && <img src={entry.posterUrl} alt="" className="favorite-poster" />}
+                                    <span className="min-w-0 flex-1">
+                                        <strong className="block truncate">{entry.title}</strong>
+                                        <span className="text-sm opacity-65 capitalize">{friendlyType(entry.type)}</span>
+                                    </span>
+                                    <span className="diary-score">{((entry.headRating + entry.heartRating) / 2).toFixed(1)}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </Section>
+
+                    <Section title="Monthly Activity">
+                        <p className="margin-note mb-4">The months when your library grew the most.</p>
+                        {stats.monthlyActivity.map((month) => (
+                            <div className="chart-bar-row" key={month.key}>
+                                <span className="text-sm">{month.label}</span>
+                                <div className="chart-bar-track"><div className="chart-bar-fill" style={{ width: `${(month.count / stats.maxMonthlyCount) * 100}%` }} /></div>
+                                <strong>{month.count}</strong>
+                            </div>
+                        ))}
+                        <p className="margin-note mt-4">Busiest month: {stats.prolificMonth.label} ({stats.prolificMonth.count})</p>
+                    </Section>
+
+                    <Section title="Over Time">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div>
+                                <h3 className="stats-section-title">Head</h3>
+                                <TrendLine entries={entries} field="headRating" color="var(--color-secondary)" />
+                            </div>
+                            <div>
+                                <h3 className="stats-section-title">Heart</h3>
+                                <TrendLine entries={entries} field="heartRating" color="var(--color-primary)" isPercentage5={true} />
+                            </div>
+                        </div>
+                    </Section>
+
+                    <Section title="vs World">
+                        {worldComparison.loading ? (
+                            <p className="margin-note">Loading…</p>
+                        ) : worldComparison.compared === 0 ? (
+                            <p className="margin-note">Comparisons available for movies, shows, and books when ratings exist.</p>
+                        ) : (
+                            <>
+                                <h3 className="stats-section-title">{worldComparison.label}</h3>
+                                <p className="opacity-75">{worldComparison.description}</p>
+                                <div className="stats-grid mt-5">
+                                    <StatCard label="Compared" value={worldComparison.compared.toString()} detail="titles" />
+                                    <StatCard label="Avg gap" value={`${worldComparison.averageDifference.toFixed(1)}`} detail="points" />
+                                    <StatCard label="Big gaps" value={`${worldComparison.bigDisagreements}%`} detail="≥1 point" />
+                                </div>
+                            </>
+                        )}
+                    </Section>
+
+                    <Section title="Scatter">
+                        <p className="margin-note mb-4">Each dot is a title. Diagonal = Head equals Heart.</p>
+                        <MediaScatterPlot entries={entries} />
+                    </Section>
+                </>
+            )}
         </div>
     );
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
     return (
-        <div className="border-t border-black/10 pt-8 first:border-0 first:pt-0">
-            <h2 className="text-xl font-bold mb-6 text-[var(--color-primary)] font-mono uppercase tracking-wider">{title}</h2>
+        <section className="page-sheet almanac-section">
+            <h2 className="stats-section-title">{title}</h2>
             {children}
+        </section>
+    );
+}
+
+function StatCard({ label, value, detail }: { label: string; value: string; detail: string }) {
+    return (
+        <div className="stat-card">
+            <p className="stat-label">{label}</p>
+            <p className="stat-number">{value}</p>
+            <p className="stat-detail">{detail}</p>
         </div>
     );
+}
+
+function RatingDistribution({ title, counts, color }: { title: string; counts: number[]; color: string }) {
+    const highest = Math.max(...counts, 1);
+    return (
+        <div>
+            <h3 className="stats-section-title">{title}</h3>
+            {counts.map((count, index) => (
+                <div className="chart-bar-row" key={index}>
+                    <span>{index + 1} / 5</span>
+                    <div className="chart-bar-track"><div className="chart-bar-fill" style={{ width: `${(count / highest) * 100}%`, background: color }} /></div>
+                    <strong>{count}</strong>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+function friendlyType(type: string) {
+    return type === "tvshow" ? "TV shows" : type === "videogame" ? "video games" : type === "boardgame" ? "board games" : `${type}s`;
 }
 
 // --- Components ---
@@ -115,33 +209,33 @@ function TasteGalaxy({ entries }: { entries: MediaEntry[] }) {
     });
 
     return (
-        <div className="relative p-2 bg-black/5 rounded-lg inline-block">
+        <div className="relative p-2 rounded inline-block" style={{ border: "var(--stitch)" }}>
             <div className="grid grid-cols-5 gap-1 w-[250px] h-[250px]">
                 {grid.map((row, rIndex) => (
                     row.map((count, cIndex) => {
                         const intensity = maxCount > 0 ? count / maxCount : 0;
                         const avgRating = ((5 - rIndex) + (cIndex + 1)) / 2;
-                        const hue = ((avgRating - 1) / 4) * 120;
+                        const hue = 20 + ((avgRating - 1) / 4) * 110;
                         const cellStyle =
                             count === 0
                                 ? {
-                                      backgroundColor: "rgba(255,255,255,0.03)",
-                                      color: "rgba(255,255,255,0.08)",
+                                      backgroundColor: "var(--tape)",
+                                      color: "transparent",
                                   }
                                 : {
-                                      backgroundColor: `hsl(${hue}, ${40 + intensity * 20}%, ${20 + intensity * 25}%)`,
-                                      color: intensity > 0.4 ? "#fff" : "rgba(255,255,255,0.45)",
+                                      backgroundColor: `hsl(${hue}, ${34 + intensity * 22}%, ${76 - intensity * 22}%)`,
+                                      color: "#3a2b3a",
                                   };
                         return (
                             <div
                                 key={`${rIndex}-${cIndex}`}
-                                className="border border-black/5 rounded-sm flex items-center justify-center text-xs font-bold relative group"
+                                className="rounded-sm flex items-center justify-center text-xs font-bold relative group"
                                 style={cellStyle}
                             >
                                 {count > 0 && count}
 
                                 {/* Tooltip */}
-                                <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 hidden group-hover:block bg-black text-white text-xs p-1 rounded whitespace-nowrap z-10 pointer-events-none">
+                                <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 hidden group-hover:block text-xs p-1 rounded whitespace-nowrap z-10 pointer-events-none" style={{ background: "var(--paper-surface)", color: "var(--app-text)", border: "var(--stitch)" }}>
                                     Head: {5 - rIndex}, Heart: {cIndex + 1}
                                 </div>
                             </div>
@@ -150,8 +244,8 @@ function TasteGalaxy({ entries }: { entries: MediaEntry[] }) {
                 ))}
             </div>
             {/* Labels */}
-            <div className="absolute -left-6 top-1/2 -translate-y-1/2 -rotate-90 text-xs font-bold opacity-50">HEAD</div>
-            <div className="absolute bottom-[-1.5rem] left-1/2 -translate-x-1/2 text-xs font-bold opacity-50">HEART</div>
+            <div className="absolute -left-7 top-1/2 -translate-y-1/2 -rotate-90 text-sm opacity-55" style={{ fontFamily: "'IM Fell English', Georgia, serif" }}>Head</div>
+            <div className="absolute bottom-[-1.5rem] left-1/2 -translate-x-1/2 text-sm opacity-55" style={{ fontFamily: "'IM Fell English', Georgia, serif" }}>Heart</div>
         </div>
     );
 }
@@ -237,7 +331,7 @@ function MediaScatterPlot({ entries }: { entries: MediaEntry[] }) {
 }
 
 function TrendLine({ entries, field, color, isPercentage5 }: { entries: MediaEntry[], field: 'headRating' | 'heartRating', color: string, isPercentage5?: boolean }) {
-    if (entries.length < 2) return <div className="h-32 flex items-center justify-center italic opacity-40">Need more data</div>;
+    if (entries.length < 2) return <div className="h-32 flex items-center justify-center opacity-40">Need more data</div>;
 
     // Sort by date (oldest to newest)
     const sorted = [...entries].sort((a, b) => a.dateWatched - b.dateWatched);
@@ -291,6 +385,66 @@ function TrendLine({ entries, field, color, isPercentage5 }: { entries: MediaEnt
     );
 }
 
+function useWorldComparison(entries: MediaEntry[]) {
+    const getGlobalRating = useAction(api.lookup.getGlobalRating);
+    const [comparisons, setComparisons] = useState<number[]>([]);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        const candidates = [...entries]
+            .filter((entry) => entry.type === "movie" || entry.type === "tvshow" || entry.type === "book")
+            .sort((a, b) => b.dateWatched - a.dateWatched)
+            .slice(0, 12);
+        let cancelled = false;
+        if (candidates.length === 0) {
+            void Promise.resolve().then(() => {
+                if (!cancelled) {
+                    setComparisons([]);
+                    setLoading(false);
+                }
+            });
+            return () => { cancelled = true; };
+        }
+
+        void Promise.resolve().then(() => {
+            if (!cancelled) setLoading(true);
+        });
+        void Promise.all(candidates.map(async (entry) => {
+            try {
+                const result = await getGlobalRating({ title: entry.title, type: entry.type });
+                if (result.globalRating === null) return null;
+                return ((entry.headRating + entry.heartRating) / 2) - result.globalRating;
+            } catch {
+                return null;
+            }
+        })).then((results) => {
+            if (!cancelled) {
+                setComparisons(results.filter((result): result is number => result !== null));
+                setLoading(false);
+            }
+        });
+        return () => { cancelled = true; };
+    }, [entries, getGlobalRating]);
+
+    const averageDifference = comparisons.length
+        ? comparisons.reduce((sum, difference) => sum + Math.abs(difference), 0) / comparisons.length
+        : 0;
+    const signedDifference = comparisons.length
+        ? comparisons.reduce((sum, difference) => sum + difference, 0) / comparisons.length
+        : 0;
+    const bigDisagreements = comparisons.length
+        ? Math.round((comparisons.filter((difference) => Math.abs(difference) >= 1).length / comparisons.length) * 100)
+        : 0;
+    const label = signedDifference > 0.25 ? "Higher than average" : signedDifference < -0.25 ? "Lower than average" : "Near average";
+    const description = signedDifference > 0.25
+        ? "Your recent ratings run above the wider crowd."
+        : signedDifference < -0.25
+            ? "Your recent ratings run below the wider crowd."
+            : "Your recent ratings land close to the wider crowd.";
+
+    return { loading, compared: comparisons.length, averageDifference, bigDisagreements, label, description };
+}
+
 
 // --- Logic Hook ---
 
@@ -324,7 +478,7 @@ function useStats(entries: MediaEntry[]) {
         const voidZone = Object.entries(corners)
             .filter(([_, count]) => count === 0)
             .map(([k]) => k === 'tl' ? 'Academic' : k === 'tr' ? 'Masterpiece' : k === 'bl' ? 'Trash' : 'Guilty Pleasure')
-            .join(", ") || "None (Well Traveled)";
+            .join(", ") || "None";
 
         // 2. Media Breakdown
         const types = Array.from(new Set(entries.map(e => e.type)));
@@ -340,12 +494,72 @@ function useStats(entries: MediaEntry[]) {
             );
             return { type: t, count: subset.length, avgHead: avgH, avgHeart: avgHt, avgRating: (avgH + avgHt) / 2, best: best.title };
         });
-        const sortedByHead = [...perType].sort((a, b) => a.avgHead - b.avgHead);
-        const mediaInsight = sortedByHead.length > 0
-            ? `You tend to be most critical of ${sortedByHead[0]?.type}s and most forgiving of ${sortedByHead[sortedByHead.length - 1]?.type}s.`
-            : "Not enough data yet.";
+        const averageHead = entries.reduce((sum, entry) => sum + entry.headRating, 0) / entries.length;
+        const averageHeart = entries.reduce((sum, entry) => sum + entry.heartRating, 0) / entries.length;
+        const averageRating = (averageHead + averageHeart) / 2;
+        const headDistribution = Array.from({ length: 5 }, (_, index) =>
+            entries.filter((entry) => Math.round(entry.headRating) === index + 1).length
+        );
+        const heartDistribution = Array.from({ length: 5 }, (_, index) =>
+            entries.filter((entry) => Math.round(entry.heartRating) === index + 1).length
+        );
+        const topType = [...perType].sort((a, b) => b.count - a.count)[0];
+        const monthlyCounts = new Map<string, { label: string; count: number }>();
+        entries.forEach((entry) => {
+            const date = new Date(entry.dateWatched);
+            const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+            const current = monthlyCounts.get(key);
+            monthlyCounts.set(key, {
+                label: date.toLocaleDateString(undefined, { month: "short", year: "numeric" }),
+                count: (current?.count ?? 0) + 1,
+            });
+        });
+        const monthlyActivity = [...monthlyCounts.entries()]
+            .map(([key, value]) => ({ key, ...value }))
+            .sort((a, b) => a.key.localeCompare(b.key))
+            .slice(-12);
+        const prolificMonth = [...monthlyActivity].sort((a, b) => b.count - a.count)[0] ?? { label: "—", count: 0 };
+        const favorites = [...entries]
+            .sort((a, b) => (b.headRating + b.heartRating) - (a.headRating + a.heartRating))
+            .slice(0, 5);
+        const loggedDays = new Set(entries.map((entry) => new Date(entry.dateWatched).toDateString()));
+        let currentStreak = 0;
+        const day = new Date();
+        while (loggedDays.has(day.toDateString())) {
+            currentStreak++;
+            day.setDate(day.getDate() - 1);
+        }
+        const difference = averageHeart - averageHead;
+        const personality = difference > 0.35
+            ? { title: "Heart-leaning", icon: "♡" }
+            : difference < -0.35
+                ? { title: "Head-leaning", icon: "✦" }
+                : { title: "Balanced", icon: "❀" };
+        const headHeartInsight = difference === 0
+            ? "Head and Heart averages match."
+            : `${Math.abs(difference).toFixed(1)} point${Math.abs(difference) >= 1 ? "s" : ""} toward ${difference > 0 ? "Heart" : "Head"}.`;
 
-        return { hotZone, voidZone, perType, mediaInsight };
+        return {
+            hotZone,
+            voidZone,
+            perType,
+            total: entries.length,
+            averageHead,
+            averageHeart,
+            averageRating,
+            headDistribution,
+            heartDistribution,
+            topTypeLabel: topType ? friendlyType(topType.type) : "—",
+            topTypeCount: topType?.count ?? 0,
+            typeCount: types.length,
+            currentStreak,
+            personality,
+            headHeartInsight,
+            favorites,
+            monthlyActivity,
+            maxMonthlyCount: Math.max(...monthlyActivity.map((month) => month.count), 1),
+            prolificMonth,
+        };
     }, [entries]);
 }
 
@@ -354,6 +568,21 @@ function getEmptyStats() {
         hotZone: "N/A",
         voidZone: "All",
         perType: [] as { type: string; count: number; avgHead: number; avgHeart: number; avgRating: number; best: string | null }[],
-        mediaInsight: "Not enough data yet.",
+        total: 0,
+        averageHead: 0,
+        averageHeart: 0,
+        averageRating: 0,
+        headDistribution: [0, 0, 0, 0, 0],
+        heartDistribution: [0, 0, 0, 0, 0],
+        topTypeLabel: "—",
+        topTypeCount: 0,
+        typeCount: 0,
+        currentStreak: 0,
+        personality: { title: "Balanced", icon: "❀" },
+        headHeartInsight: "Log a rating to begin.",
+        favorites: [] as MediaEntry[],
+        monthlyActivity: [] as { key: string; label: string; count: number }[],
+        maxMonthlyCount: 1,
+        prolificMonth: { label: "—", count: 0 },
     };
 }

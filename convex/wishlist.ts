@@ -17,6 +17,7 @@ export const addWishlistItem = mutation({
     type: mediaTypeValidator,
     dateAdded: v.number(),
     notes: v.optional(v.string()),
+    posterUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -30,6 +31,7 @@ export const addWishlistItem = mutation({
       type: args.type,
       dateAdded: args.dateAdded,
       notes: args.notes,
+      posterUrl: args.posterUrl,
     });
   },
 });
@@ -70,6 +72,7 @@ export const updateWishlistItem = mutation({
     type: v.optional(mediaTypeValidator),
     dateAdded: v.optional(v.number()),
     notes: v.optional(v.string()),
+    posterUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -90,6 +93,7 @@ export const updateWishlistItem = mutation({
     if (args.type !== undefined) updates.type = args.type;
     if (args.dateAdded !== undefined) updates.dateAdded = args.dateAdded;
     if (args.notes !== undefined) updates.notes = args.notes;
+    if (args.posterUrl !== undefined) updates.posterUrl = args.posterUrl;
 
     await ctx.db.patch("wishlistItems", args.id, updates);
   },
@@ -123,6 +127,7 @@ export const bulkAddWishlistItems = mutation({
       type: mediaTypeValidator,
       dateAdded: v.number(),
       notes: v.optional(v.string()),
+      posterUrl: v.optional(v.string()),
     })),
   },
   handler: async (ctx, args) => {
@@ -136,6 +141,7 @@ export const bulkAddWishlistItems = mutation({
         type: item.type,
         dateAdded: item.dateAdded,
         notes: item.notes,
+        posterUrl: item.posterUrl,
       });
       ids.push(id);
     }

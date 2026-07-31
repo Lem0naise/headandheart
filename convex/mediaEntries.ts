@@ -20,6 +20,7 @@ export const addMediaEntry = mutation({
         heartRating: v.number(),
         dateWatched: v.number(),
         notes: v.optional(v.string()),
+        posterUrl: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
         const userId = await getAuthUserId(ctx);
@@ -43,9 +44,31 @@ export const addMediaEntry = mutation({
             heartRating: args.heartRating,
             dateWatched: args.dateWatched,
             notes: args.notes,
+            posterUrl: args.posterUrl,
         });
 
         return id;
+    },
+});
+
+// Unified, user-owned data for cross-status search and the activity timeline.
+export const getAllMedia = query({
+    args: {},
+    handler: async (ctx) => {
+        const userId = await getAuthUserId(ctx);
+        if (!userId) return [];
+
+        const [library, currently, wishlist] = await Promise.all([
+            ctx.db.query("mediaEntries").withIndex("by_user", (q) => q.eq("userId", userId)).collect(),
+            ctx.db.query("currentlyItems").withIndex("by_user", (q) => q.eq("userId", userId)).collect(),
+            ctx.db.query("wishlistItems").withIndex("by_user", (q) => q.eq("userId", userId)).collect(),
+        ]);
+
+        return [
+            ...library.map((item) => ({ ...item, status: "library" as const, activityDate: item.dateWatched })),
+            ...currently.map((item) => ({ ...item, status: "currently" as const, activityDate: item.dateStarted })),
+            ...wishlist.map((item) => ({ ...item, status: "wishlist" as const, activityDate: item.dateAdded })),
+        ];
     },
 });
 
@@ -87,6 +110,7 @@ export const updateMediaEntry = mutation({
         heartRating: v.optional(v.number()),
         dateWatched: v.optional(v.number()),
         notes: v.optional(v.string()),
+        posterUrl: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
         const userId = await getAuthUserId(ctx);
@@ -117,6 +141,7 @@ export const updateMediaEntry = mutation({
         if (args.heartRating !== undefined) updates.heartRating = args.heartRating;
         if (args.dateWatched !== undefined) updates.dateWatched = args.dateWatched;
         if (args.notes !== undefined) updates.notes = args.notes;
+        if (args.posterUrl !== undefined) updates.posterUrl = args.posterUrl;
 
         await ctx.db.patch("mediaEntries", args.id, updates);
     },

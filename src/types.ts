@@ -10,6 +10,7 @@ export interface MediaEntry {
   heartRating: number;
   dateWatched: number;
   notes?: string;
+  posterUrl?: string;
 }
 
 export interface WishlistItem {
@@ -18,6 +19,7 @@ export interface WishlistItem {
   type: MediaType;
   dateAdded: number;
   notes?: string;
+  posterUrl?: string;
 }
 
 export interface CurrentlyItem {
@@ -29,6 +31,7 @@ export interface CurrentlyItem {
   notes?: string;
   totalPages?: number;
   totalEpisodes?: number;
+  posterUrl?: string;
 }
 
 export type LibrarySortOption = "dateNewest" | "dateOldest" | "alphaAZ" | "alphaZA" | "rating";

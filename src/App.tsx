@@ -10,15 +10,15 @@ import {
 } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useState, useMemo, useEffect, useRef, useCallback, lazy, Suspense, type JSX } from "react";
+import { Component, useState, useMemo, useEffect, useRef, useCallback, useDeferredValue, lazy, Suspense, type JSX, type ReactNode } from "react";
 import type { MediaType, MediaEntry, WishlistItem, CurrentlyItem, LibrarySortOption, WishlistSortOption, CurrentlySortOption, AppMode } from "./types";
 
 const StatsView = lazy(() => import("./Stats"));
 const ExportModal = lazy(() => import("./ExportModal"));
 
-const CACHE_KEY = "headandheart_entries_cache";
-const WISHLIST_CACHE_KEY = "headandheart_wishlist_cache";
-const CURRENTLY_CACHE_KEY = "headandheart_currently_cache";
+const CACHE_KEY = "headandheart_entries_cache_v2";
+const WISHLIST_CACHE_KEY = "headandheart_wishlist_cache_v2";
+const CURRENTLY_CACHE_KEY = "headandheart_currently_cache_v2";
 
 interface CacheData<T> {
   data: T[];
@@ -280,30 +280,16 @@ const RATING_LABELS = {
 
 function LoadingSkeleton() {
   return (
-    <div className="flex flex-col gap-4 animate-pulse">
-      <div className="control-bar card">
-        <div className="control-row control-row-top">
-          <div className="h-10 bg-white/10 rounded w-32"></div>
-          <div className="h-10 bg-white/10 rounded w-32"></div>
-        </div>
-        <div className="control-row filter-row gap-2">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="h-10 bg-white/10 rounded w-20"></div>
-          ))}
-        </div>
-      </div>
-      <div className="entries-grid">
-        {[...Array(6)].map((_, i) => (
-          <div key={i} className="card entry-card p-0 overflow-hidden">
-            <div className="h-12 bg-white/5"></div>
-            <div className="p-4 flex flex-col gap-3">
-              <div className="h-6 bg-white/10 rounded w-3/4"></div>
-              <div className="h-4 bg-white/10 rounded w-full"></div>
-              <div className="h-4 bg-white/10 rounded w-2/3"></div>
-            </div>
+    <div className="diary-page animate-pulse">
+      {[...Array(6)].map((_, i) => (
+        <div key={i} className="diary-row">
+          <div className="h-4 bg-current opacity-10 rounded w-10"></div>
+          <div className="flex flex-col gap-2">
+            <div className="h-6 bg-current opacity-10 rounded w-3/5"></div>
+            <div className="h-3 bg-current opacity-10 rounded w-2/5"></div>
           </div>
-        ))}
-      </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -312,13 +298,13 @@ function StatsLoadingSkeleton() {
   return (
     <div className="flex flex-col gap-8 pb-12 animate-pulse">
       <div className="flex items-center gap-4 mb-2">
-        <div className="h-10 bg-white/10 rounded w-24"></div>
-        <div className="h-8 bg-white/10 rounded w-48"></div>
+        <div className="h-10 bg-current opacity-10 rounded w-24"></div>
+        <div className="h-8 bg-current opacity-10 rounded w-48"></div>
       </div>
       {[...Array(3)].map((_, i) => (
-        <div key={i} className="card p-6">
-          <div className="h-6 bg-white/10 rounded w-64 mb-4"></div>
-          <div className="h-64 bg-white/10 rounded"></div>
+        <div key={i} className="page-sheet">
+          <div className="h-6 bg-current opacity-10 rounded w-64 mb-4"></div>
+          <div className="h-64 bg-current opacity-10 rounded"></div>
         </div>
       ))}
     </div>
@@ -326,11 +312,12 @@ function StatsLoadingSkeleton() {
 }
 
 const modeOrder: AppMode[] = ["library", "currently", "wishlist"];
-
-function nextMode(m: AppMode): AppMode {
-  const idx = modeOrder.indexOf(m);
-  return modeOrder[(idx + 1) % modeOrder.length];
-}
+type View = "home" | "stats";
+type Theme = "light" | "dark";
+type UnifiedMedia = (MediaEntry | WishlistItem | CurrentlyItem) & {
+  status: AppMode;
+  activityDate: number;
+};
 
 function modeLabel(m: AppMode): string {
   if (m === "library") return "Library";
@@ -344,11 +331,54 @@ function modeActiveClass(m: AppMode): string {
   return "active-wishlist";
 }
 
+function useTheme() {
+  const [theme, setTheme] = useState<Theme>(() => {
+    const saved = localStorage.getItem("headandheart_theme");
+    if (saved === "light" || saved === "dark") return saved;
+    return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  });
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem("headandheart_theme", theme);
+  }, [theme]);
+
+  return [theme, () => setTheme((current) => current === "light" ? "dark" : "light")] as const;
+}
+
+class ViewErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <div className="empty-state card">
+          <p className="text-lg">This view wandered off the page.</p>
+          <button className="btn btn-primary mt-3" onClick={() => this.setState({ failed: false })}>Try again</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
-  const [view, setView] = useState<"home" | "stats">("home");
+  const [view, setView] = useState<View>("home");
   const [searchQuery, setSearchQuery] = useState("");
   const [mode, setMode] = useState<AppMode>("library");
+  const [theme, toggleTheme] = useTheme();
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [cachedData, setCachedData] = useState<{ data: MediaEntry[]; filter?: string } | null>(() => getCachedEntries());
+  const shouldLoadAllMedia = Boolean(deferredSearchQuery.trim());
+  const allMedia = useQuery(
+    // @ts-expect-error - Convex "skip" pattern is not included in the hook type.
+    shouldLoadAllMedia ? api.mediaEntries.getAllMedia : "skip",
+    shouldLoadAllMedia ? {} : "skip",
+  ) as UnifiedMedia[] | undefined;
 
   const handleEntriesUpdate = useCallback((data: MediaEntry[], filter?: string) => {
     setCachedData({ data, filter });
@@ -363,6 +393,8 @@ export default function App() {
         onModeChange={setMode}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
+        theme={theme}
+        onThemeToggle={toggleTheme}
       />
       <main className="p-3 md:p-6 max-w-5xl mx-auto">
         <Authenticated>
@@ -370,19 +402,22 @@ export default function App() {
             <Content
               mode={mode}
               onModeChange={setMode}
-              searchQuery={searchQuery}
+              searchQuery={deferredSearchQuery}
               onSearchChange={setSearchQuery}
               cachedData={cachedData}
               onEntriesUpdate={handleEntriesUpdate}
+              globalResults={allMedia}
             />
           ) : (
-            <Suspense fallback={<StatsLoadingSkeleton />}>
-              <StatsLoader
-                onBack={() => setView("home")}
-                cachedData={cachedData}
-                onEntriesUpdate={handleEntriesUpdate}
-              />
-            </Suspense>
+            <ViewErrorBoundary>
+              <Suspense fallback={<StatsLoadingSkeleton />}>
+                <StatsLoader
+                  onBack={() => setView("home")}
+                  cachedData={cachedData}
+                  onEntriesUpdate={handleEntriesUpdate}
+                />
+              </Suspense>
+            </ViewErrorBoundary>
           )}
         </Authenticated>
         <Unauthenticated>
@@ -430,13 +465,17 @@ function Header({
   onModeChange,
   searchQuery,
   onSearchChange,
+  theme,
+  onThemeToggle,
 }: {
-  currentView?: "home" | "stats";
-  onViewChange?: (v: "home" | "stats") => void;
+  currentView?: View;
+  onViewChange?: (v: View) => void;
   mode: AppMode;
   onModeChange: (m: AppMode) => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
+  theme: Theme;
+  onThemeToggle: () => void;
 }) {
   const { isAuthenticated } = useConvexAuth();
   const { signOut } = useAuthActions();
@@ -449,6 +488,16 @@ function Header({
           <span className="logo-icon">{Icons.heart}</span>
           <span className="hidden md:inline">HeadandHeart</span>
         </div>
+        <button
+          className="theme-toggle shrink-0"
+          type="button"
+          onClick={onThemeToggle}
+          aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+          title={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+        >
+          <span aria-hidden="true">{theme === "light" ? "☾" : "☀"}</span>
+          <span className="hidden sm:inline">{theme === "light" ? "Dark" : "Light"}</span>
+        </button>
 
         {/* Desktop search + mode */}
         {isAuthenticated && currentView === "home" && (
@@ -465,41 +514,24 @@ function Header({
           </div>
         )}
 
-        {/* Mobile mode nav — centered */}
-        {isAuthenticated && currentView === "home" && (
-          <div className="flex md:hidden items-center gap-0.5 absolute left-1/2 -translate-x-1/2">
-            {mode !== "library" && (
-              <button className="mode-arrow-btn" onClick={() => onModeChange(mode === "wishlist" ? "currently" : "library")} title="Previous">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15,18 9,12 15,6" /></svg>
-              </button>
-            )}
-            <button
-              className={`mode-cycle-pill text-xs px-2 py-1 ${modeActiveClass(mode)}`}
-              onClick={() => onModeChange(nextMode(mode))}
-            >
-              {mode === "library" ? "Library" : mode === "currently" ? "Currently" : "Wishlist"}
-            </button>
-            {mode !== "wishlist" && (
-              <button className="mode-arrow-btn" onClick={() => onModeChange(mode === "library" ? "currently" : "wishlist")} title="Next">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9,18 15,12 9,6" /></svg>
-              </button>
-            )}
-          </div>
-        )}
-
         {isAuthenticated && (
           <div className="flex items-center gap-1.5 md:gap-2">
             {currentView === "home" && (
               <div className="hidden md:flex items-center gap-1.5">
+                <div className="chapter-tabs">
+                  {modeOrder.map((m) => (
+                    <button
+                      key={m}
+                      className={`chapter-tab ${mode === m ? `active ${modeActiveClass(m)}` : ""}`}
+                      onClick={() => onModeChange(m)}
+                      aria-current={mode === m ? "page" : undefined}
+                    >
+                      {modeLabel(m)}
+                    </button>
+                  ))}
+                </div>
                 <button
-                  className={`mode-cycle-pill ${modeActiveClass(mode)}`}
-                  onClick={() => onModeChange(nextMode(mode))}
-                  title={`${modeLabel(mode)} (keys: l/c/w)`}
-                >
-                  {modeLabel(mode)}
-                </button>
-                <button
-                  className="btn btn-secondary btn-sm"
+                  className="btn btn-ghost btn-sm"
                   onClick={() => onViewChange?.("stats")}
                   title="Taste Stats"
                 >
@@ -590,20 +622,25 @@ function Header({
           />
         </div>
       )}
+      {isAuthenticated && (
+        <nav className="mobile-bottom-nav md:hidden" aria-label="Primary navigation">
+          <button className={currentView === "home" && mode === "library" ? "active-library" : ""} onClick={() => { onViewChange?.("home"); onModeChange("library"); }}>Library</button>
+          <button className={currentView === "home" && mode === "currently" ? "active-currently" : ""} onClick={() => { onViewChange?.("home"); onModeChange("currently"); }}>Current</button>
+          <button className={currentView === "home" && mode === "wishlist" ? "active-wishlist" : ""} onClick={() => { onViewChange?.("home"); onModeChange("wishlist"); }}>Wishlist</button>
+          <button className={currentView === "stats" ? "active-stats" : ""} onClick={() => onViewChange?.("stats")}>Stats</button>
+        </nav>
+      )}
     </header>
   );
 }
 
 function WelcomeSection() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
-      <div className="text-center">
-        <div className="float" style={{ width: 64, height: 64, margin: '0 auto 1rem' }}>
-          {Icons.heart}
-        </div>
-        <h2 className="text-3xl font-bold mb-2">HeadandHeart</h2>
-        <p className="text-lg opacity-70 mb-6">
-          Rate media on two axes: Head & Heart
+    <div className="flex flex-col items-center justify-center min-h-[70vh] gap-7 px-4">
+      <div className="text-center max-w-md">
+        <h1 className="text-5xl mb-3">HeadandHeart</h1>
+        <p className="margin-note text-lg">
+          Rate what you watch, read, and play — Head and Heart.
         </p>
       </div>
       <SignInForm />
@@ -618,9 +655,9 @@ function SignInForm() {
   const [loading, setLoading] = useState(false);
 
   return (
-    <div className="card w-full max-w-sm">
-      <h3 className="text-xl mb-3 text-center">
-        {flow === "signIn" ? "Welcome back" : "Create account"}
+    <div className="page-sheet w-full max-w-sm">
+      <h3 className="text-2xl mb-3 text-center">
+        {flow === "signIn" ? "Sign in" : "Sign up"}
       </h3>
       <form
         className="flex flex-col gap-3"
@@ -664,7 +701,7 @@ function SignInForm() {
           </button>
         </div>
         {error && (
-          <div className="text-sm text-red-400 bg-red-900/30 p-2 rounded">{error}</div>
+          <div className="text-sm p-2 rounded" style={{ color: "var(--color-negative)", border: "var(--stitch)", borderColor: "var(--color-negative)" }}>{error}</div>
         )}
       </form>
     </div>
@@ -675,8 +712,10 @@ function Content({
   mode,
   onModeChange,
   searchQuery,
+  onSearchChange,
   cachedData,
-  onEntriesUpdate
+  onEntriesUpdate,
+  globalResults,
 }: {
   mode: AppMode;
   onModeChange: (m: AppMode) => void;
@@ -684,6 +723,7 @@ function Content({
   onSearchChange: (q: string) => void;
   cachedData: { data: MediaEntry[]; filter?: string } | null;
   onEntriesUpdate: (entries: MediaEntry[], filter?: string) => void;
+  globalResults: UnifiedMedia[] | undefined;
 }) {
   const isLibrary = mode === "library";
   const isCurrently = mode === "currently";
@@ -696,13 +736,20 @@ function Content({
   const [editingWishlist, setEditingWishlist] = useState<WishlistItem | null>(null);
   const [editingCurrently, setEditingCurrently] = useState<CurrentlyItem | null>(null);
   const [completingItem, setCompletingItem] = useState<CurrentlyItem | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<MediaType | "all">("all");
-  const [librarySortOption, setLibrarySortOption] = useState<LibrarySortOption>("rating");
+  const [librarySortOption, setLibrarySortOption] = useState<LibrarySortOption>("dateNewest");
   const [wishlistSortOption, setWishlistSortOption] = useState<WishlistSortOption>("dateNewest");
   const [currentlySortOption, setCurrentlySortOption] = useState<CurrentlySortOption>("dateNewest");
   const [headWeight, setHeadWeight] = useState(50);
   const [cachedWishlistData, setCachedWishlistData] = useState<{ data: WishlistItem[]; filter?: string } | null>(() => getCachedWishlistItems());
   const [cachedCurrentlyData, setCachedCurrentlyData] = useState<{ data: CurrentlyItem[]; filter?: string } | null>(() => getCachedCurrentlyItems());
+
+  useEffect(() => {
+    if (!toast) return;
+    const timeout = window.setTimeout(() => setToast(null), 2800);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
 
   const tf = typeFilter === "all" ? undefined : typeFilter;
 
@@ -845,6 +892,20 @@ function Content({
     return processed;
   }, [currentlyDisplayItems, currentlySortOption, searchQuery]);
 
+  const crossStatusResults = useMemo(() => {
+    const q = searchQuery?.trim().toLowerCase();
+    if (!q || !globalResults) return [];
+    return globalResults
+      .filter((item) => {
+        const typeInfo = MEDIA_TYPES.find((type) => type.value === item.type);
+        return item.title.toLowerCase().includes(q)
+          || item.notes?.toLowerCase().includes(q)
+          || typeInfo?.label.toLowerCase().includes(q);
+      })
+      .filter((item) => typeFilter === "all" || item.type === typeFilter)
+      .sort((a, b) => b.activityDate - a.activityDate);
+  }, [globalResults, searchQuery, typeFilter]);
+
   const sortOption = isLibrary ? librarySortOption : isWishlist ? wishlistSortOption : currentlySortOption;
 
   const isLoading = isLibrary
@@ -853,7 +914,10 @@ function Content({
     ? wishlistItems === undefined && !wishlistDisplayItems
     : currentlyItemsQuery === undefined && !currentlyDisplayItems;
 
-  const displayCount = isLibrary ? sortedLibraryEntries.length : isWishlist ? sortedWishlistItems.length : sortedCurrentlyItems.length;
+  const isCrossStatusSearch = Boolean(searchQuery?.trim());
+  const displayCount = isCrossStatusSearch
+    ? crossStatusResults.length
+    : isLibrary ? sortedLibraryEntries.length : isWishlist ? sortedWishlistItems.length : sortedCurrentlyItems.length;
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -882,10 +946,6 @@ function Content({
         return;
       }
 
-      // 'l' Library, 'c' Currently, 'w' Wishlist
-      if (key === 'l') { e.preventDefault(); onModeChange("library"); return; }
-      if (key === 'c') { e.preventDefault(); onModeChange("currently"); return; }
-      if (key === 'w') { e.preventDefault(); onModeChange("wishlist"); return; }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -893,79 +953,74 @@ function Content({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="control-bar card">
-        <div className="control-row control-row-top">
-          <div className="actions-stack">
-            <button className="btn btn-primary btn-lg" onClick={() => setShowAddForm(true)} title="Keyboard shortcut: n or t">
-              {Icons.plus}
-              <span>{isLibrary ? "Add" : isCurrently ? "Add Current" : "Add to Wishlist"}</span>
-            </button>
-            <div className="control-row sort-row">
-              <select
-                className="select"
-                value={sortOption}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (isLibrary) setLibrarySortOption(val as LibrarySortOption);
-                  else if (isWishlist) setWishlistSortOption(val as WishlistSortOption);
-                  else setCurrentlySortOption(val as CurrentlySortOption);
-                }}
-              >
-                <option value="dateNewest">Newest</option>
-                <option value="dateOldest">Oldest</option>
-                <option value="alphaAZ">A-Z</option>
-                <option value="alphaZA">Z-A</option>
-                {isLibrary && <option value="rating">Rating</option>}
-              </select>
+      <div className="diary-toolbar">
+        <button className="btn btn-primary" onClick={() => setShowAddForm(true)} title="Keyboard shortcut: n or t">
+          {Icons.plus}
+          <span>Add</span>
+        </button>
 
-              {isLibrary && librarySortOption === "rating" && (
-                <div className="weight-slider">
-                  <span style={{ color: 'var(--color-secondary)' }}>Head {headWeight}%</span>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={headWeight}
-                    onChange={(e) => setHeadWeight(Number(e.target.value))}
-                    className="slider"
-                  />
-                  <span style={{ color: 'var(--color-primary)' }}>{100 - headWeight}% Heart</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="control-row filter-row">
-          <div className="filter-scroll">
+        <div className="filter-scroll flex-1">
+          <button
+            className={`filter-pill ${typeFilter === "all" ? "active" : ""}`}
+            onClick={() => setTypeFilter("all")}
+          >
+            All
+          </button>
+          {MEDIA_TYPES.map((t) => (
             <button
-              className={`filter-pill ${typeFilter === "all" ? "active" : ""}`}
-              onClick={() => setTypeFilter("all")}
+              key={t.value}
+              className={`filter-pill type-${t.value} ${typeFilter === t.value ? "active" : ""}`}
+              onClick={() => setTypeFilter(t.value)}
             >
-              All
+              {t.icon}
+              <span className="hidden sm:inline">{t.label}</span>
             </button>
-            {MEDIA_TYPES.map((t) => (
-              <button
-                key={t.value}
-                className={`filter-pill ${typeFilter === t.value ? "active" : ""}`}
-                onClick={() => setTypeFilter(t.value)}
-              >
-                {t.icon}
-                <span className="hidden sm:inline">{t.label}</span>
-              </button>
-            ))}
-          </div>
+          ))}
         </div>
+
+        <select
+          className="select text-xs py-1"
+          aria-label="Sort entries"
+          value={sortOption}
+          onChange={(e) => {
+            const val = e.target.value;
+            if (isLibrary) setLibrarySortOption(val as LibrarySortOption);
+            else if (isWishlist) setWishlistSortOption(val as WishlistSortOption);
+            else setCurrentlySortOption(val as CurrentlySortOption);
+          }}
+        >
+          <option value="dateNewest">Newest</option>
+          <option value="dateOldest">Oldest</option>
+          <option value="alphaAZ">A-Z</option>
+          <option value="alphaZA">Z-A</option>
+          {isLibrary && <option value="rating">Rating</option>}
+        </select>
+
+        {isLibrary && librarySortOption === "rating" && (
+          <div className="weight-slider w-full justify-center">
+            <span style={{ color: 'var(--color-secondary)' }}>Head {headWeight}%</span>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={headWeight}
+              onChange={(e) => setHeadWeight(Number(e.target.value))}
+              className="slider"
+              aria-label="Head versus heart weighting"
+            />
+            <span style={{ color: 'var(--color-primary)' }}>{100 - headWeight}% Heart</span>
+          </div>
+        )}
       </div>
 
-      {showAddForm && isLibrary && <EntryModal initialType={typeFilter === "all" ? undefined : typeFilter} onClose={() => setShowAddForm(false)} />}
-      {showAddForm && isCurrently && <CurrentlyModal initialType={typeFilter === "all" ? undefined : typeFilter} onClose={() => setShowAddForm(false)} />}
-      {showAddForm && isWishlist && <WishlistModal initialType={typeFilter === "all" ? undefined : typeFilter} onClose={() => setShowAddForm(false)} />}
+      {showAddForm && isLibrary && <EntryModal initialType={typeFilter === "all" ? undefined : typeFilter} onClose={() => setShowAddForm(false)} onSuccess={setToast} />}
+      {showAddForm && isCurrently && <CurrentlyModal initialType={typeFilter === "all" ? undefined : typeFilter} onClose={() => setShowAddForm(false)} onSuccess={setToast} />}
+      {showAddForm && isWishlist && <WishlistModal initialType={typeFilter === "all" ? undefined : typeFilter} onClose={() => setShowAddForm(false)} onSuccess={setToast} />}
       {showImport && !isWishlist && <ImportModal existingEntries={entries || []} onClose={() => setShowImport(false)} />}
-      {editingEntry && isLibrary && <EntryModal entry={editingEntry} onClose={() => setEditingEntry(null)} />}
-      {editingWishlist && isWishlist && <WishlistModal item={editingWishlist} onClose={() => setEditingWishlist(null)} />}
-      {editingCurrently && isCurrently && <CurrentlyModal item={editingCurrently} onClose={() => setEditingCurrently(null)} />}
-      {completingItem && <CompleteModal item={completingItem} onClose={() => setCompletingItem(null)} />}
+      {editingEntry && isLibrary && <EntryModal entry={editingEntry} onClose={() => setEditingEntry(null)} onSuccess={setToast} />}
+      {editingWishlist && isWishlist && <WishlistModal item={editingWishlist} onClose={() => setEditingWishlist(null)} onSuccess={setToast} />}
+      {editingCurrently && isCurrently && <CurrentlyModal item={editingCurrently} onClose={() => setEditingCurrently(null)} onSuccess={setToast} />}
+      {completingItem && <CompleteModal item={completingItem} onClose={() => setCompletingItem(null)} onSuccess={setToast} />}
       {showExport && (
         <Suspense fallback={null}>
           <ExportModal
@@ -977,26 +1032,46 @@ function Content({
         </Suspense>
       )}
 
-      {!isLoading && displayCount === 0 ? (
+      {isCrossStatusSearch ? (
+        <GlobalSearchResults
+          results={crossStatusResults}
+          isLoading={globalResults === undefined}
+          onOpen={(targetMode) => {
+            onModeChange(targetMode);
+            onSearchChange("");
+          }}
+        />
+      ) : !isLoading && displayCount === 0 ? (
         <div className="empty-state">
-          {searchQuery ? (
-            <>
-              {Icons.search}
-              <p>No matches found</p>
-              <p className="text-sm opacity-60">Try a different search term</p>
-            </>
-          ) : (
-            <>
-              {Icons.empty}
-              <p>{isLibrary ? "No entries yet" : isCurrently ? "Nothing in progress" : "No wishlist items yet"}</p>
-              <p className="text-sm opacity-60">Add your first one</p>
-            </>
+          <p className="empty-line">
+            {searchQuery
+              ? "No matches."
+              : isLibrary
+              ? "No entries yet."
+              : isCurrently
+              ? "Nothing in progress."
+              : "Wishlist is empty."}
+          </p>
+          <p className="empty-sub">
+            {searchQuery
+              ? "Try another title."
+              : isLibrary
+              ? "Add something you finished."
+              : isCurrently
+              ? "Start something."
+              : "Add something you want."}
+          </p>
+          {!searchQuery && (
+            <button className="btn btn-primary" onClick={() => setShowAddForm(true)}>
+              {Icons.plus}
+              <span>Add</span>
+            </button>
           )}
         </div>
       ) : isLoading ? (
         <LoadingSkeleton />
       ) : (
-        <div className="entries-grid">
+        <div className={`diary-page ${isWishlist ? "wishlist-page" : isCurrently ? "currently-page" : ""}`}>
           {isLibrary && sortedLibraryEntries.map((entry, i) => (
             <MediaEntryCard
               key={entry._id}
@@ -1004,6 +1079,7 @@ function Content({
               headWeight={librarySortOption === "rating" ? headWeight : 50}
               onEdit={() => setEditingEntry(entry)}
               index={i}
+              onToast={setToast}
             />
           ))}
           {isWishlist && sortedWishlistItems.map((item, i) => (
@@ -1012,6 +1088,7 @@ function Content({
               item={item}
               onEdit={() => setEditingWishlist(item)}
               index={i}
+              onToast={setToast}
             />
           ))}
           {isCurrently && sortedCurrentlyItems.map((item, i) => (
@@ -1021,26 +1098,88 @@ function Content({
               onEdit={() => setEditingCurrently(item)}
               onComplete={() => setCompletingItem(item)}
               index={i}
+              onToast={setToast}
             />
           ))}
         </div>
       )}
+      {toast && <div className="toast-region" role="status"><div className="toast">{toast}</div></div>}
     </div>
   );
 }
 
+function GlobalSearchResults({
+  results,
+  isLoading,
+  onOpen,
+}: {
+  results: UnifiedMedia[];
+  isLoading: boolean;
+  onOpen: (mode: AppMode) => void;
+}) {
+  if (isLoading) return <LoadingSkeleton />;
+  if (results.length === 0) {
+    return (
+      <div className="empty-state">
+        <p className="empty-line">No matches.</p>
+        <p className="empty-sub">Try another title.</p>
+      </div>
+    );
+  }
+
+  return (
+    <section aria-label="Search results" className="diary-page">
+      <p className="margin-note mb-2">
+        {results.length} match{results.length === 1 ? "" : "es"}
+      </p>
+      {results.map((item) => {
+        const typeInfo = MEDIA_TYPES.find((type) => type.value === item.type);
+        const score = item.status === "library"
+          ? ((item as MediaEntry).headRating + (item as MediaEntry).heartRating) / 2
+          : null;
+        return (
+          <button
+            type="button"
+            className={`diary-row card-in type-${item.type}`}
+            key={`${item.status}-${item._id}`}
+            onClick={() => onOpen(item.status)}
+            aria-label={`Open ${item.title} in ${modeLabel(item.status)}`}
+          >
+            <span className="diary-date">
+              {new Date(item.activityDate).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+            </span>
+            <span className="diary-body flex items-start justify-between gap-3">
+              <span className="flex gap-3 min-w-0">
+                {item.posterUrl && <img src={item.posterUrl} alt="" className="diary-poster" />}
+                <span className="min-w-0">
+                  <span className="diary-title block">{item.title}</span>
+                  <span className="diary-marks">
+                    <span className={`status-badge status-${item.status}`}>{modeLabel(item.status)}</span>
+                    <span className="mark-type">{typeInfo?.icon} {typeInfo?.label}</span>
+                  </span>
+                  {item.notes && <span className="diary-notes block">“{item.notes}”</span>}
+                </span>
+              </span>
+              {score !== null && <span className="diary-score">{score.toFixed(1)}</span>}
+            </span>
+          </button>
+        );
+      })}
+    </section>
+  );
+}
+
 function MediaSearchAutocomplete({
-  type,
   value,
   onChange,
+  onPick,
 }: {
-  type: MediaType;
   value: string;
   onChange: (title: string) => void;
+  onPick?: (result: { title: string; year?: string; poster?: string; type: MediaType }) => void;
 }) {
   const searchMedia = useAction(api.lookup.searchMedia);
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<{ title: string; year?: string; poster?: string }[]>([]);
+  const [results, setResults] = useState<{ title: string; year?: string; poster?: string; type: MediaType }[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
@@ -1054,47 +1193,40 @@ function MediaSearchAutocomplete({
       }
     }
     document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
   }, []);
 
   const doSearch = useCallback((q: string) => {
     if (q.length < 2) { setResults([]); setOpen(false); setSearched(false); return; }
     setLoading(true);
     setSearched(false);
-    searchMedia({ query: q, type })
+    searchMedia({ query: q })
       .then((r) => { setResults(r); setSearched(true); setOpen(r.length > 0); })
       .catch(() => { setResults([]); setSearched(true); setOpen(false); })
       .finally(() => setLoading(false));
-  }, [searchMedia, type]);
+  }, [searchMedia]);
 
   const handleInputChange = (q: string) => {
-    setQuery(q);
+    onChange(q);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => doSearch(q), 400);
   };
-
-  const sourceLabel = type === "movie" || type === "tvshow" ? "TMDB" : type === "book" ? "OpenLibrary" : null;
 
   return (
     <div className="autocomplete-wrapper" ref={wrapperRef}>
       <input
         className="input w-full"
         type="text"
-        value={value || query}
-        onChange={(e) => {
-          if (value && value === query) {
-            setQuery("");
-            onChange("");
-            handleInputChange(e.target.value);
-          } else {
-            handleInputChange(e.target.value);
-            onChange(e.target.value);
-          }
-        }}
-        placeholder={sourceLabel ? `Search ${sourceLabel}...` : "Search..."}
+        value={value}
+        onChange={(e) => handleInputChange(e.target.value)}
+        placeholder="Search movies, shows, or books—or type a title..."
+        autoFocus
       />
       {loading && <div className="text-xs opacity-50 mt-1">Searching...</div>}
-      {searched && !loading && results.length === 0 && query.length >= 2 && (
+      {searched && !loading && results.length === 0 && value.length >= 2 && (
         <div className="text-xs opacity-50 mt-1">No results found</div>
       )}
       {open && results.length > 0 && (
@@ -1105,18 +1237,18 @@ function MediaSearchAutocomplete({
               className="autocomplete-item"
               onClick={() => {
                 onChange(r.title);
-                setQuery(r.title);
+                onPick?.(r);
                 setOpen(false);
                 setSearched(false);
               }}
             >
               <div className="flex items-center gap-2 min-w-0">
                 {r.poster && (
-                  <img src={r.poster} alt="" className="w-8 h-12 rounded object-cover shrink-0 bg-white/5" />
+                  <img src={r.poster} alt="" className="w-8 h-12 rounded object-cover shrink-0" style={{ background: "var(--tape)" }} />
                 )}
                 <div className="min-w-0">
                   <div className="truncate">{r.title}</div>
-                  {r.year && <div className="text-xs opacity-50">{r.year}</div>}
+                  <div className="text-xs opacity-50">{r.year ? `${r.year} · ` : ""}{MEDIA_TYPES.find((mediaType) => mediaType.value === r.type)?.label}</div>
                 </div>
               </div>
             </div>
@@ -1127,18 +1259,22 @@ function MediaSearchAutocomplete({
   );
 }
 
-function EntryModal({ entry, initialType, onClose }: { entry?: MediaEntry; initialType?: MediaType; onClose: () => void }) {
+function EntryModal({ entry, initialType, onClose, onSuccess }: { entry?: MediaEntry; initialType?: MediaType; onClose: () => void; onSuccess?: (message: string) => void }) {
   const addEntry = useMutation(api.mediaEntries.addMediaEntry);
   const updateEntry = useMutation(api.mediaEntries.updateMediaEntry);
 
   const [title, setTitle] = useState(entry?.title ?? "");
-  const [type, setType] = useState<MediaType>(entry?.type ?? initialType ?? "movie");
+  const [type, setType] = useState<MediaType>(() => {
+    const remembered = localStorage.getItem("headandheart_last_media_type") as MediaType | null;
+    return entry?.type ?? initialType ?? remembered ?? "movie";
+  });
   const [headRating, setHeadRating] = useState(entry?.headRating ?? 3);
   const [heartRating, setHeartRating] = useState(entry?.heartRating ?? 3);
   const [dateWatched, setDateWatched] = useState(
     entry ? new Date(entry.dateWatched).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]
   );
   const [notes, setNotes] = useState(entry?.notes ?? "");
+  const [posterUrl, setPosterUrl] = useState(entry?.posterUrl);
   const [loading, setLoading] = useState(false);
 
   const isEditing = !!entry;
@@ -1148,6 +1284,7 @@ function EntryModal({ entry, initialType, onClose }: { entry?: MediaEntry; initi
   const notesRef = useRef(notes);
   const headRatingRef = useRef(headRating);
   const heartRatingRef = useRef(heartRating);
+  const posterUrlRef = useRef(posterUrl);
   const loadingRef = useRef(loading);
   const isEditingRef = useRef(isEditing);
 
@@ -1157,6 +1294,7 @@ function EntryModal({ entry, initialType, onClose }: { entry?: MediaEntry; initi
   useEffect(() => { notesRef.current = notes; }, [notes]);
   useEffect(() => { headRatingRef.current = headRating; }, [headRating]);
   useEffect(() => { heartRatingRef.current = heartRating; }, [heartRating]);
+  useEffect(() => { posterUrlRef.current = posterUrl; }, [posterUrl]);
   useEffect(() => { loadingRef.current = loading; }, [loading]);
   useEffect(() => { isEditingRef.current = isEditing; }, [isEditing]);
 
@@ -1175,6 +1313,7 @@ function EntryModal({ entry, initialType, onClose }: { entry?: MediaEntry; initi
           heartRating: heartRatingRef.current,
           dateWatched: new Date(dateWatchedRef.current).getTime(),
           notes: notesRef.current.trim() || undefined,
+          posterUrl: posterUrlRef.current,
         });
       } else {
         await addEntry({
@@ -1184,16 +1323,19 @@ function EntryModal({ entry, initialType, onClose }: { entry?: MediaEntry; initi
           heartRating: heartRatingRef.current,
           dateWatched: new Date(dateWatchedRef.current).getTime(),
           notes: notesRef.current.trim() || undefined,
+          posterUrl: posterUrlRef.current,
         });
       }
       invalidateCache();
+      localStorage.setItem("headandheart_last_media_type", typeRef.current);
+      onSuccess?.(isEditingRef.current ? "Saved." : "Added.");
       onClose();
     } catch (error) {
       console.error("Failed to save:", error);
     } finally {
       setLoading(false);
     }
-  }, [entry, addEntry, updateEntry, onClose]);
+  }, [entry, addEntry, updateEntry, onClose, onSuccess]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1216,16 +1358,8 @@ function EntryModal({ entry, initialType, onClose }: { entry?: MediaEntry; initi
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-xl mb-4 text-center">{isEditing ? "Edit Entry" : "Add Entry"}</h2>
+        <h2 className="mb-4 text-center">{isEditing ? "Edit Entry" : "Add Entry"}</h2>
         <form onSubmit={(e) => { void handleSubmit(e); }} className="flex flex-col gap-3">
-          <input
-            className="input w-full"
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Title"
-            required
-          />
           <div className="flex gap-2">
             <select className="select flex-1" value={type} onChange={(e) => setType(e.target.value as MediaType)}>
               {MEDIA_TYPES.map((t) => (
@@ -1240,10 +1374,20 @@ function EntryModal({ entry, initialType, onClose }: { entry?: MediaEntry; initi
             />
           </div>
           <MediaSearchAutocomplete
-            type={type}
             value={title}
             onChange={setTitle}
+            onPick={(result) => { setPosterUrl(result.poster); setType(result.type); }}
           />
+          <div className="quick-picks" aria-label="Date shortcuts">
+            <button type="button" onClick={() => setDateWatched(new Date().toISOString().split("T")[0])}>Today</button>
+            <button type="button" onClick={() => setDateWatched(new Date(Date.now() - 86_400_000).toISOString().split("T")[0])}>Yesterday</button>
+            <button type="button" onClick={() => setDateWatched(new Date(Date.now() - 7 * 86_400_000).toISOString().split("T")[0])}>Last week</button>
+          </div>
+          <div className="quick-picks" aria-label="Quick rating picks">
+            <button type="button" onClick={() => { setHeadRating(4); setHeartRating(5); }}>Loved it</button>
+            <button type="button" onClick={() => { setHeadRating(3); setHeartRating(3); }}>Meh</button>
+            <button type="button" onClick={() => { setHeadRating(2); setHeartRating(1); }}>Not for me</button>
+          </div>
           <RatingGrid
             headRating={headRating}
             heartRating={heartRating}
@@ -1269,7 +1413,7 @@ function EntryModal({ entry, initialType, onClose }: { entry?: MediaEntry; initi
   );
 }
 
-function WishlistModal({ item, initialType, onClose }: { item?: WishlistItem; initialType?: MediaType; onClose: () => void }) {
+function WishlistModal({ item, initialType, onClose, onSuccess }: { item?: WishlistItem; initialType?: MediaType; onClose: () => void; onSuccess?: (message: string) => void }) {
   const addItem = useMutation(api.wishlist.addWishlistItem);
   const updateItem = useMutation(api.wishlist.updateWishlistItem);
   const bulkAdd = useMutation(api.wishlist.bulkAddWishlistItems);
@@ -1280,6 +1424,7 @@ function WishlistModal({ item, initialType, onClose }: { item?: WishlistItem; in
     item ? new Date(item.dateAdded).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]
   );
   const [notes, setNotes] = useState(item?.notes ?? "");
+  const [posterUrl, setPosterUrl] = useState(item?.posterUrl);
   const [loading, setLoading] = useState(false);
   const [bulkMode, setBulkMode] = useState(false);
   const [bulkText, setBulkText] = useState("");
@@ -1291,13 +1436,15 @@ function WishlistModal({ item, initialType, onClose }: { item?: WishlistItem; in
     if (!title.trim()) return;
     setLoading(true);
     try {
-      const payload = { title: title.trim(), type, dateAdded: new Date(dateAdded).getTime(), notes: notes.trim() || undefined };
+      const payload = { title: title.trim(), type, dateAdded: new Date(dateAdded).getTime(), notes: notes.trim() || undefined, posterUrl };
       if (isEditing) {
         await updateItem({ id: item._id, ...payload });
       } else {
         await addItem(payload);
       }
       invalidateWishlistCache();
+      localStorage.setItem("headandheart_last_media_type", type);
+      onSuccess?.(isEditing ? "Saved." : "Added.");
       onClose();
     } catch (error) {
       console.error("Failed to save wishlist item:", error);
@@ -1331,7 +1478,7 @@ function WishlistModal({ item, initialType, onClose }: { item?: WishlistItem; in
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-xl mb-4 text-center">{isEditing ? "Edit Wishlist Item" : "Add to Wishlist"}</h2>
+        <h2 className="mb-4 text-center">{isEditing ? "Edit Wishlist" : "Add Wishlist"}</h2>
         {!isEditing && (
           <div className="flex justify-end mb-2">
             <button
@@ -1377,14 +1524,6 @@ function WishlistModal({ item, initialType, onClose }: { item?: WishlistItem; in
           </div>
         ) : (
           <form onSubmit={(e) => { void handleSubmit(e); }} className="flex flex-col gap-3">
-            <input
-              className="input w-full"
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Title"
-              required
-            />
             <div className="flex gap-2">
               <select className="select flex-1" value={type} onChange={(e) => setType(e.target.value as MediaType)}>
                 {MEDIA_TYPES.map((t) => (
@@ -1398,7 +1537,7 @@ function WishlistModal({ item, initialType, onClose }: { item?: WishlistItem; in
                 onChange={(e) => setDateAdded(e.target.value)}
               />
             </div>
-            <MediaSearchAutocomplete type={type} value={title} onChange={setTitle} />
+            <MediaSearchAutocomplete value={title} onChange={setTitle} onPick={(result) => { setPosterUrl(result.poster); setType(result.type); }} />
             <textarea
               className="input w-full resize-none"
               rows={3}
@@ -1419,7 +1558,7 @@ function WishlistModal({ item, initialType, onClose }: { item?: WishlistItem; in
   );
 }
 
-function CurrentlyModal({ item, initialType, onClose }: { item?: CurrentlyItem; initialType?: MediaType; onClose: () => void }) {
+function CurrentlyModal({ item, initialType, onClose, onSuccess }: { item?: CurrentlyItem; initialType?: MediaType; onClose: () => void; onSuccess?: (message: string) => void }) {
   const addItem = useMutation(api.currently.addCurrentlyItem);
   const updateItem = useMutation(api.currently.updateCurrentlyItem);
   const bulkAdd = useMutation(api.currently.bulkAddCurrentlyItems);
@@ -1433,6 +1572,7 @@ function CurrentlyModal({ item, initialType, onClose }: { item?: CurrentlyItem; 
   const [totalPages, setTotalPages] = useState(item?.totalPages ?? 0);
   const [totalEpisodes, setTotalEpisodes] = useState(item?.totalEpisodes ?? 0);
   const [notes, setNotes] = useState(item?.notes ?? "");
+  const [posterUrl, setPosterUrl] = useState(item?.posterUrl);
   const [loading, setLoading] = useState(false);
   const [bulkMode, setBulkMode] = useState(false);
   const [bulkText, setBulkText] = useState("");
@@ -1448,7 +1588,7 @@ function CurrentlyModal({ item, initialType, onClose }: { item?: CurrentlyItem; 
     if (!title.trim()) return;
     setLoading(true);
     try {
-      const payload: Record<string, unknown> = { title: title.trim(), type, dateStarted: new Date(dateStarted).getTime(), progress, notes: notes.trim() || undefined };
+      const payload: Record<string, unknown> = { title: title.trim(), type, dateStarted: new Date(dateStarted).getTime(), progress, notes: notes.trim() || undefined, posterUrl };
       if (type === "book" && totalPages > 0) payload.totalPages = totalPages;
       if (type === "tvshow" && totalEpisodes > 0) payload.totalEpisodes = totalEpisodes;
       if (isEditing) {
@@ -1457,6 +1597,8 @@ function CurrentlyModal({ item, initialType, onClose }: { item?: CurrentlyItem; 
         await addItem(payload as Parameters<typeof addItem>[0]);
       }
       invalidateCurrentlyCache();
+      localStorage.setItem("headandheart_last_media_type", type);
+      onSuccess?.(isEditing ? "Saved." : "Added.");
       onClose();
     } catch (error) {
       console.error("Failed to save:", error);
@@ -1488,7 +1630,7 @@ function CurrentlyModal({ item, initialType, onClose }: { item?: CurrentlyItem; 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-xl mb-4 text-center">{isEditing ? "Edit Current Item" : "Add Current Item"}</h2>
+        <h2 className="mb-4 text-center">{isEditing ? "Edit Current" : "Add Current"}</h2>
         {!isEditing && (
           <div className="flex justify-end mb-2">
             <button
@@ -1559,14 +1701,6 @@ function CurrentlyModal({ item, initialType, onClose }: { item?: CurrentlyItem; 
           </div>
         ) : (
           <form onSubmit={(e) => { void handleSubmit(e); }} className="flex flex-col gap-3">
-            <input
-              className="input w-full"
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Title"
-              required
-            />
             <div className="flex gap-2">
               <select className="select flex-1" value={type} onChange={(e) => setType(e.target.value as MediaType)}>
                 {MEDIA_TYPES.map((t) => (
@@ -1580,7 +1714,7 @@ function CurrentlyModal({ item, initialType, onClose }: { item?: CurrentlyItem; 
                 onChange={(e) => setDateStarted(e.target.value)}
               />
             </div>
-            <MediaSearchAutocomplete type={type} value={title} onChange={setTitle} />
+            <MediaSearchAutocomplete value={title} onChange={setTitle} onPick={(result) => { setPosterUrl(result.poster); setType(result.type); }} />
             {type === "book" || type === "tvshow" ? (
               <div>
                 <label className="text-sm opacity-70">
@@ -1647,7 +1781,7 @@ function CurrentlyModal({ item, initialType, onClose }: { item?: CurrentlyItem; 
   );
 }
 
-function CompleteModal({ item, onClose }: { item: CurrentlyItem; onClose: () => void }) {
+function CompleteModal({ item, onClose, onSuccess }: { item: CurrentlyItem; onClose: () => void; onSuccess?: (message: string) => void }) {
   const completeCurrently = useMutation(api.currently.completeCurrently);
   const [headRating, setHeadRating] = useState(3);
   const [heartRating, setHeartRating] = useState(3);
@@ -1667,6 +1801,7 @@ function CompleteModal({ item, onClose }: { item: CurrentlyItem; onClose: () => 
       });
       invalidateCache();
       invalidateCurrentlyCache();
+      onSuccess?.("Completed.");
       onClose();
     } catch (error) {
       console.error("Failed to complete:", error);
@@ -1678,8 +1813,8 @@ function CompleteModal({ item, onClose }: { item: CurrentlyItem; onClose: () => 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-xl mb-4 text-center">Complete & Rate</h2>
-        <p className="text-center text-sm opacity-70 mb-3">{item.title}</p>
+        <h2 className="mb-4 text-center">Complete</h2>
+        <p className="text-center margin-note mb-3">{item.title}</p>
         <div className="flex flex-col gap-3">
           <RatingGrid
             headRating={headRating}
@@ -1687,12 +1822,21 @@ function CompleteModal({ item, onClose }: { item: CurrentlyItem; onClose: () => 
             type={item.type}
             onSelect={(head, heart) => { setHeadRating(head); setHeartRating(heart); }}
           />
+          <div className="quick-picks" aria-label="Quick rating picks">
+            <button type="button" onClick={() => { setHeadRating(4); setHeartRating(5); }}>Loved it</button>
+            <button type="button" onClick={() => { setHeadRating(3); setHeartRating(3); }}>Meh</button>
+            <button type="button" onClick={() => { setHeadRating(2); setHeartRating(1); }}>Not for me</button>
+          </div>
           <input
             className="input w-full"
             type="date"
             value={dateWatched}
             onChange={(e) => setDateWatched(e.target.value)}
           />
+          <div className="quick-picks" aria-label="Date shortcuts">
+            <button type="button" onClick={() => setDateWatched(new Date().toISOString().split("T")[0])}>Today</button>
+            <button type="button" onClick={() => setDateWatched(new Date(Date.now() - 86_400_000).toISOString().split("T")[0])}>Yesterday</button>
+          </div>
           <textarea
             className="input w-full resize-none"
             rows={2}
@@ -1767,31 +1911,65 @@ function RatingGrid({
   );
 }
 
-function getRatingColor(score: number) {
+// Lightness is left to CSS (--score-lit) so the score stays legible on both papers.
+function getRatingColorVars(score: number): React.CSSProperties {
   const hue = ((score - 1) / 4) * 120;
   const sat = 35 + (score / 5) * 25;
-  const lit = 30 + (score / 5) * 15;
-  return `hsl(${hue}, ${sat}%, ${lit}%)`;
+  return { "--score-hue": hue, "--score-sat": `${sat}%` } as React.CSSProperties;
+}
+
+function formatRelativeDate(timestamp: number) {
+  const days = Math.floor((Date.now() - timestamp) / 86_400_000);
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 7) return `${days} days ago`;
+  if (days < 31) return `${Math.floor(days / 7)} weeks ago`;
+  if (days < 365) return `${Math.floor(days / 30)} months ago`;
+  return `${Math.floor(days / 365)} years ago`;
+}
+
+function useCardSwipe(onSwipeRight: () => void, onSwipeLeft: () => void) {
+  const startX = useRef<number | null>(null);
+  return {
+    onTouchStart: (event: React.TouchEvent) => { startX.current = event.touches[0]?.clientX ?? null; },
+    onTouchEnd: (event: React.TouchEvent) => {
+      if (startX.current === null) return;
+      const distance = (event.changedTouches[0]?.clientX ?? startX.current) - startX.current;
+      startX.current = null;
+      if (distance > 72) onSwipeRight();
+      if (distance < -72) onSwipeLeft();
+    },
+  };
 }
 
 function WishlistCard({
   item,
   onEdit,
   index,
+  onToast,
 }: {
   item: WishlistItem;
   onEdit: () => void;
   index: number;
+  onToast?: (message: string) => void;
 }) {
-  const deleteItem = useMutation(api.wishlist.deleteWishlistItem);
+  const deleteItem = useMutation(api.wishlist.deleteWishlistItem).withOptimisticUpdate((store, args) => {
+    for (const query of store.getAllQueries(api.wishlist.getWishlistItems)) {
+      if (query.value) {
+        store.setQuery(api.wishlist.getWishlistItems, query.args, query.value.filter((item) => item._id !== args.id));
+      }
+    }
+    const allMedia = store.getQuery(api.mediaEntries.getAllMedia, {});
+    if (allMedia) {
+      store.setQuery(api.mediaEntries.getAllMedia, {}, allMedia.filter((item) => item._id !== args.id));
+    }
+  });
   const promoteToCurrently = useMutation(api.currently.promoteToCurrently);
   const [showConfirm, setShowConfirm] = useState(false);
   const [promoting, setPromoting] = useState(false);
+  const swipeHandlers = useCardSwipe(onEdit, () => setShowConfirm(true));
 
   const typeInfo = MEDIA_TYPES.find((t) => t.value === item.type);
-  const formattedDate = new Date(item.dateAdded).toLocaleDateString(undefined, {
-    month: "short", day: "numeric", year: "numeric",
-  });
 
   const handleStart = async () => {
     setPromoting(true);
@@ -1799,6 +1977,7 @@ function WishlistCard({
       await promoteToCurrently({ wishlistItemId: item._id });
       invalidateWishlistCache();
       invalidateCurrentlyCache();
+      onToast?.("Started.");
     } catch (error) {
       console.error("Failed to start:", error);
     } finally {
@@ -1807,51 +1986,43 @@ function WishlistCard({
   };
 
   return (
-    <div className="card entry-card relative group p-0 overflow-hidden flex flex-col card-in" style={{ animationDelay: `${index * 40}ms` }}>
-      <div className={`entry-banner type-${item.type}`}>
-        <div className="entry-banner-fill w-full bg-[var(--color-primary)]" />
-        <div className="entry-banner-content">
-          <div className="flex items-center gap-2">
-            <span>{typeInfo?.icon}</span>
-            <span className="font-bold uppercase tracking-wider text-sm">{typeInfo?.label}</span>
-          </div>
-          <div className="flex items-center gap-3 text-xs opacity-80 whitespace-nowrap">
-            <span className="px-2 py-1 rounded-full bg-black/20 text-white">Wishlist</span>
-            <span>Added {formattedDate}</span>
-          </div>
+    <article className={`wish-sticker card-in type-${item.type}`} style={{ animationDelay: `${index * 40}ms` }} {...swipeHandlers}>
+      {item.posterUrl && <img src={item.posterUrl} alt="" className="diary-poster" style={{ width: "2.6rem", height: "3.7rem" }} />}
+
+      <div className="min-w-0 flex-1">
+        <h3 className="diary-title" style={{ fontSize: "1.2rem" }}>{item.title}</h3>
+        <div className="diary-marks">
+          <span className="mark-type">{typeInfo?.icon} {typeInfo?.label}</span>
+          <span>Added {formatRelativeDate(item.dateAdded)}</span>
         </div>
+        {item.notes && <p className="diary-notes">"{item.notes}"</p>}
       </div>
 
-      <div className="p-4 flex flex-col gap-2 flex-1">
-        <div className="flex justify-between items-start gap-2">
-          <div className="entry-title mb-0">{item.title}</div>
-          <div className="entry-actions shrink-0">
-            <button onClick={(e) => { e.stopPropagation(); onEdit(); }} title="Edit">{Icons.edit}</button>
-            <button onClick={(e) => { e.stopPropagation(); setShowConfirm(true); }} title="Delete">{Icons.trash}</button>
-          </div>
-        </div>
-        {item.notes && <p className="entry-notes mt-0 mb-0">"{item.notes}"</p>}
-        <div className="flex gap-2 mt-auto pt-2">
-          <button className="btn btn-accent btn-sm flex-1" onClick={() => { void handleStart(); }} disabled={promoting}>
-            {Icons.play} {promoting ? "..." : "Start"}
-          </button>
+      <div className="flex flex-col items-end gap-1.5 shrink-0">
+        <button className="btn btn-accent btn-sm" onClick={() => { void handleStart(); }} disabled={promoting} aria-label={`Start ${item.title}`}>
+          {Icons.play} {promoting ? "..." : "Start"}
+        </button>
+        <div className="entry-actions">
+          <button onClick={onEdit} title="Edit" aria-label={`Edit ${item.title}`}>{Icons.edit}</button>
+          <button onClick={() => setShowConfirm(true)} title="Delete" aria-label={`Delete ${item.title}`}>{Icons.trash}</button>
         </div>
       </div>
 
       {showConfirm && (
-        <div className="confirm-overlay z-10">
-          <p className="text-sm">Delete?</p>
+        <div className="confirm-overlay">
+          <p className="margin-note">Delete?</p>
           <div className="flex gap-2">
-            <button className="btn btn-ghost btn-sm" onClick={() => setShowConfirm(false)}>No</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowConfirm(false)}>Cancel</button>
             <button className="btn btn-danger btn-sm" onClick={() => {
               void deleteItem({ id: item._id });
               invalidateWishlistCache();
               setShowConfirm(false);
-            }}>Yes</button>
+              onToast?.("Deleted.");
+            }}>Delete</button>
           </div>
         </div>
       )}
-    </div>
+    </article>
   );
 }
 
@@ -1860,13 +2031,25 @@ function MediaEntryCard({
   headWeight,
   onEdit,
   index,
+  onToast,
 }: {
   entry: MediaEntry;
   headWeight: number;
   onEdit: () => void;
   index: number;
+  onToast?: (message: string) => void;
 }) {
-  const deleteEntry = useMutation(api.mediaEntries.deleteMediaEntry);
+  const deleteEntry = useMutation(api.mediaEntries.deleteMediaEntry).withOptimisticUpdate((store, args) => {
+    for (const query of store.getAllQueries(api.mediaEntries.getMediaEntries)) {
+      if (query.value) {
+        store.setQuery(api.mediaEntries.getMediaEntries, query.args, query.value.filter((item) => item._id !== args.id));
+      }
+    }
+    const allMedia = store.getQuery(api.mediaEntries.getAllMedia, {});
+    if (allMedia) {
+      store.setQuery(api.mediaEntries.getAllMedia, {}, allMedia.filter((item) => item._id !== args.id));
+    }
+  });
   const getGlobalRating = useAction(api.lookup.getGlobalRating);
   const [showConfirm, setShowConfirm] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -1876,12 +2059,13 @@ function MediaEntryCard({
   const formattedDate = new Date(entry.dateWatched).toLocaleDateString(undefined, {
     month: "short", day: "numeric", year: "numeric",
   });
+  const dayMonth = new Date(entry.dateWatched).toLocaleDateString(undefined, {
+    day: "numeric", month: "short",
+  });
 
   const headW = headWeight / 100;
   const heartW = 1 - headW;
   const totalScore = entry.headRating * headW + entry.heartRating * heartW;
-  const scorePercent = Math.min(100, Math.max(0, (totalScore / 5) * 100));
-  const bannerColor = getRatingColor(totalScore);
 
   const handleExpand = () => {
     const next = !expanded;
@@ -1897,80 +2081,85 @@ function MediaEntryCard({
   const globalMatched = globalRating?.rating != null;
   const deltaGlobal = globalMatched ? (yourAvg - globalRating.rating!) : null;
   const gr = globalRating;
+  const swipeHandlers = useCardSwipe(onEdit, () => setShowConfirm(true));
 
   return (
-    <div className={`card entry-card relative group p-0 overflow-hidden flex flex-col card-in ${expanded ? "card-expanded" : ""}`} style={{ animationDelay: `${index * 40}ms` }} onClick={handleExpand}>
-      <div className={`entry-banner type-${entry.type}`}>
-        <div className="entry-banner-fill" style={{ width: `${scorePercent}%`, background: bannerColor }} />
-        <div className="entry-banner-content">
-          <div className="flex items-center gap-2">
-            <span>{typeInfo?.icon}</span>
-            <span className="font-bold uppercase tracking-wider text-sm">{typeInfo?.label}</span>
+    <article
+      className={`diary-row card-in type-${entry.type} ${expanded ? "card-expanded" : ""}`}
+      style={{ animationDelay: `${index * 40}ms` }}
+      onClick={handleExpand}
+      {...swipeHandlers}
+    >
+      <div className="diary-date">{dayMonth}</div>
+
+      <div className="diary-body">
+        <div className="flex justify-between items-start gap-3">
+          <div className="flex gap-3 min-w-0">
+            {entry.posterUrl && <img src={entry.posterUrl} alt="" className="diary-poster" />}
+            <div className="min-w-0">
+              <h3 className="diary-title">{entry.title}</h3>
+              <div className="diary-marks">
+                <span className="mark-type">{typeInfo?.icon} {typeInfo?.label}</span>
+                <span>Head {entry.headRating}</span>
+                <span>Heart {entry.heartRating}</span>
+                <span>{formatRelativeDate(entry.dateWatched)}</span>
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-3 text-xs opacity-80 whitespace-nowrap">
-            <span className="opacity-75">Head {entry.headRating}</span>
-            <span className="opacity-75">Heart {entry.heartRating}</span>
-            <span>{formattedDate}</span>
-            <span className="rating-score-large text-white drop-shadow">
-              {totalScore.toFixed(1)}
-            </span>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="diary-score is-rated" style={getRatingColorVars(totalScore)}>{totalScore.toFixed(1)}</span>
+            <div className="entry-actions" onClick={(e) => e.stopPropagation()}>
+              <button onClick={onEdit} title="Edit" aria-label={`Edit ${entry.title}`}>{Icons.edit}</button>
+              <button onClick={() => setShowConfirm(true)} title="Delete" aria-label={`Delete ${entry.title}`}>{Icons.trash}</button>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="p-4 flex flex-col gap-1 flex-1">
-        <div className="flex justify-between items-start gap-2">
-          <div className="entry-title mb-0">{entry.title}</div>
-          <div className="entry-actions shrink-0" onClick={(e) => e.stopPropagation()}>
-            <button onClick={onEdit} title="Edit">{Icons.edit}</button>
-            <button onClick={() => setShowConfirm(true)} title="Delete">{Icons.trash}</button>
-          </div>
-        </div>
-
-        {entry.notes && <p className="entry-notes mt-0 mb-0">"{entry.notes}"</p>}
+        {entry.notes && <p className="diary-notes">"{entry.notes}"</p>}
 
         <div className="expanded-detail">
-          <div className="mt-3 pt-3 border-t border-white/10 flex flex-col gap-2">
+          <div className="mt-3 pt-3 flex flex-col gap-2" style={{ borderTop: "var(--stitch)" }}>
             <div className="flex gap-4 text-sm opacity-70 flex-wrap">
-              <span>Watched: {formattedDate}</span>
-              <span>Head: {entry.headRating}/5</span>
-              <span>Heart: {entry.heartRating}/5</span>
-              <span>Score: {totalScore.toFixed(1)}/5</span>
+              <span>Finished {formattedDate}</span>
+              <span>Head {entry.headRating}/5</span>
+              <span>Heart {entry.heartRating}/5</span>
+              <span>Score {totalScore.toFixed(1)}/5</span>
             </div>
             {gr && gr.rating != null && (
-              <div className="flex items-center gap-2 text-sm bg-white/5 rounded-lg px-3 py-2">
+              <div className="flex items-center gap-2 text-sm px-3 py-2 rounded" style={{ background: "var(--tape)" }}>
                 <span className="opacity-60">{gr.source}:</span>
                 <span className="font-bold">{gr.rating}/5</span>
                 {gr.votes != null && (
                   <span className="opacity-40 text-xs">({gr.votes.toLocaleString()} votes)</span>
                 )}
                 {deltaGlobal !== null && (
-                  <span className={`ml-auto text-xs px-2 py-0.5 rounded-full ${Math.abs(deltaGlobal) < 0.5 ? 'bg-yellow-500/20 text-yellow-300' : deltaGlobal > 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
-                    {deltaGlobal > 0 ? '+' : ''}{deltaGlobal.toFixed(1)} vs world
+                  <span className="ml-auto margin-note">
+                    {deltaGlobal > 0 ? "+" : ""}{deltaGlobal.toFixed(1)} vs world
                   </span>
                 )}
               </div>
             )}
             {!globalMatched && expanded && (entry.type === "movie" || entry.type === "tvshow" || entry.type === "book") && (
-              <div className="text-xs opacity-30 italic">Comparing to {entry.type === "book" ? "OpenLibrary" : "TMDB"}...</div>
+              <div className="margin-note text-xs">Loading…</div>
             )}
           </div>
         </div>
       </div>
 
       {showConfirm && (
-        <div className="confirm-overlay z-10" onClick={(e) => e.stopPropagation()}>
-          <p className="text-sm">Delete?</p>
+        <div className="confirm-overlay" onClick={(e) => e.stopPropagation()}>
+          <p className="margin-note">Delete?</p>
           <div className="flex gap-2">
-            <button className="btn btn-ghost btn-sm" onClick={() => setShowConfirm(false)}>No</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowConfirm(false)}>Cancel</button>
             <button className="btn btn-danger btn-sm" onClick={() => {
               void deleteEntry({ id: entry._id });
               invalidateCache();
-            }}>Yes</button>
+              onToast?.("Deleted.");
+            }}>Delete</button>
           </div>
         </div>
       )}
-    </div>
+    </article>
   );
 }
 
@@ -1979,21 +2168,31 @@ function CurrentlyCard({
   onEdit,
   onComplete,
   index,
+  onToast,
 }: {
   item: CurrentlyItem;
   onEdit: () => void;
   onComplete: () => void;
   index: number;
+  onToast?: (message: string) => void;
 }) {
-  const deleteItem = useMutation(api.currently.deleteCurrentlyItem);
+  const deleteItem = useMutation(api.currently.deleteCurrentlyItem).withOptimisticUpdate((store, args) => {
+    for (const query of store.getAllQueries(api.currently.getCurrentlyItems)) {
+      if (query.value) {
+        store.setQuery(api.currently.getCurrentlyItems, query.args, query.value.filter((item) => item._id !== args.id));
+      }
+    }
+    const allMedia = store.getQuery(api.mediaEntries.getAllMedia, {});
+    if (allMedia) {
+      store.setQuery(api.mediaEntries.getAllMedia, {}, allMedia.filter((item) => item._id !== args.id));
+    }
+  });
   const demoteCurrently = useMutation(api.currently.demoteCurrently);
   const [showConfirm, setShowConfirm] = useState(false);
   const [demoting, setDemoting] = useState(false);
+  const swipeHandlers = useCardSwipe(onEdit, () => setShowConfirm(true));
 
   const typeInfo = MEDIA_TYPES.find((t) => t.value === item.type);
-  const formattedDate = new Date(item.dateStarted).toLocaleDateString(undefined, {
-    month: "short", day: "numeric", year: "numeric",
-  });
 
   const isBookTracked = item.type === "book" && item.totalPages != null && item.totalPages > 0;
   const isTVTracked = item.type === "tvshow" && item.totalEpisodes != null && item.totalEpisodes > 0;
@@ -2014,6 +2213,7 @@ function CurrentlyCard({
       await demoteCurrently({ currentlyItemId: item._id });
       invalidateCurrentlyCache();
       invalidateWishlistCache();
+      onToast?.("Moved to wishlist.");
     } catch (error) {
       console.error("Failed to move back:", error);
     } finally {
@@ -2022,63 +2222,59 @@ function CurrentlyCard({
   };
 
   return (
-    <div className="card entry-card relative group p-0 overflow-hidden flex flex-col card-in" style={{ animationDelay: `${index * 40}ms` }}>
-      <div className={`entry-banner type-${item.type}`}>
-        <div className="entry-banner-fill" style={{ width: `${displayProgress}%`, background: 'var(--color-accent)' }} />
-        <div className="entry-banner-content">
-          <div className="flex items-center gap-2">
-            <span>{typeInfo?.icon}</span>
-            <span className="font-bold uppercase tracking-wider text-sm">{typeInfo?.label}</span>
+    <article className={`bookmark-slip card-in type-${item.type}`} style={{ animationDelay: `${index * 40}ms` }} {...swipeHandlers}>
+      <div className="bookmark-ribbon" />
+
+      <div className="flex justify-between items-start gap-3">
+        <div className="flex gap-3 min-w-0">
+          {item.posterUrl && <img src={item.posterUrl} alt="" className="diary-poster" />}
+          <div className="min-w-0">
+            <h3 className="diary-title">{item.title}</h3>
+            <div className="diary-marks">
+              <span className="mark-type">{typeInfo?.icon} {typeInfo?.label}</span>
+              <span>Started {formatRelativeDate(item.dateStarted)}</span>
+            </div>
           </div>
-          <div className="flex items-center gap-3 text-xs opacity-80 whitespace-nowrap">
-            <span className="px-2 py-1 rounded-full bg-black/20 text-white">In Progress</span>
-            <span>Started {formattedDate}</span>
-          </div>
+        </div>
+        <div className="entry-actions shrink-0">
+          <button onClick={onEdit} title="Edit" aria-label={`Edit ${item.title}`}>{Icons.edit}</button>
+          <button onClick={() => setShowConfirm(true)} title="Delete" aria-label={`Delete ${item.title}`}>{Icons.trash}</button>
         </div>
       </div>
 
-      <div className="p-4 flex flex-col gap-2 flex-1">
-        <div className="flex justify-between items-start gap-2">
-          <div className="entry-title mb-0">{item.title}</div>
-          <div className="entry-actions shrink-0">
-            <button onClick={(e) => { e.stopPropagation(); onEdit(); }} title="Edit">{Icons.edit}</button>
-            <button onClick={(e) => { e.stopPropagation(); setShowConfirm(true); }} title="Delete">{Icons.trash}</button>
-          </div>
-        </div>
+      <div className="progress-bar mt-3">
+        <div className="progress-fill" style={{ width: `${displayProgress}%` }} />
+      </div>
+      <div className="progress-label">
+        <span>{progressLabel}</span>
+        <span>{displayProgress >= 100 ? "Finish" : ""}</span>
+      </div>
 
-        <div className="progress-bar">
-          <div className="progress-fill" style={{ width: `${displayProgress}%` }} />
-        </div>
-        <div className="progress-label">
-          <span>{progressLabel}</span>
-          <span>{displayProgress >= 100 ? "Done!" : ""}</span>
-        </div>
+      {item.notes && <p className="diary-notes">"{item.notes}"</p>}
 
-        {item.notes && <p className="entry-notes mt-0 mb-0">"{item.notes}"</p>}
-
-        <div className="flex gap-2 mt-auto pt-2">
-          <button className="btn btn-ghost btn-sm flex-1" onClick={() => { void handleDemote(); }} disabled={demoting}>
-            {Icons.undo} {demoting ? "..." : "Wishlist"}
-          </button>
-          <button className="btn btn-accent btn-sm flex-1" onClick={() => { onComplete(); }}>
-            {Icons.check} Complete
-          </button>
-        </div>
+      <div className="flex gap-2 mt-3">
+        <button className="btn btn-ghost btn-sm flex-1" onClick={() => { void handleDemote(); }} disabled={demoting} aria-label={`Move ${item.title} back to wishlist`}>
+          {Icons.undo} {demoting ? "..." : "Wishlist"}
+        </button>
+        <button className="btn btn-accent btn-sm flex-1" onClick={() => { onComplete(); }} aria-label={`Complete ${item.title}`}>
+          {Icons.check} Finish
+        </button>
       </div>
 
       {showConfirm && (
-        <div className="confirm-overlay z-10" onClick={(e) => e.stopPropagation()}>
-          <p className="text-sm">Delete?</p>
+        <div className="confirm-overlay" onClick={(e) => e.stopPropagation()}>
+          <p className="margin-note">Delete?</p>
           <div className="flex gap-2">
-            <button className="btn btn-ghost btn-sm" onClick={() => setShowConfirm(false)}>No</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowConfirm(false)}>Cancel</button>
             <button className="btn btn-danger btn-sm" onClick={() => {
               void deleteItem({ id: item._id });
               invalidateCurrentlyCache();
-            }}>Yes</button>
+              onToast?.("Deleted.");
+            }}>Delete</button>
           </div>
         </div>
       )}
-    </div>
+    </article>
   );
 }
 
@@ -2248,13 +2444,13 @@ function ImportModal({ existingEntries, onClose }: { existingEntries: MediaEntry
     return (
       <div className="modal-overlay" onClick={onClose}>
         <div className="modal-content !max-w-2xl" onClick={e => e.stopPropagation()}>
-          <h2 className="text-xl mb-2 text-center">Select Start Row</h2>
+          <h2 className="mb-2 text-center">Select Start Row</h2>
           <p className="text-center text-sm opacity-70 mb-4">
             Found {entries.length} rows. We recommend starting at row {currentIndex + 1}.
           </p>
-          <div className="max-h-[50vh] overflow-y-auto border border-white/10 rounded mb-4">
+          <div className="max-h-[50vh] overflow-y-auto rounded mb-4" style={{ border: "var(--stitch)" }}>
             <table className="w-full text-sm text-left border-collapse">
-              <thead className="bg-white/5 sticky top-0">
+              <thead className="sticky top-0" style={{ background: "var(--paper-surface)" }}>
                 <tr>
                   <th className="p-2">#</th>
                   <th className="p-2">Title</th>
@@ -2269,18 +2465,20 @@ function ImportModal({ existingEntries, onClose }: { existingEntries: MediaEntry
                   return (
                     <tr
                       key={idx}
-                      className={`cursor-pointer border-b border-white/5 hover:bg-white/5 ${isSelected ? 'bg-[var(--color-secondary)]/20' : ''}`}
+                      className="cursor-pointer"
+                      style={{
+                        borderBottom: "var(--stitch)",
+                        background: isSelected ? "var(--tape)" : undefined,
+                      }}
                       onClick={() => setCurrentIndex(idx)}
                     >
                       <td className="p-2 opacity-50">{idx + 1}</td>
                       <td className="p-2 font-medium">{ent.title}</td>
                       <td className="p-2 opacity-70">{new Date(ent.dateWatched).toLocaleDateString()}</td>
                       <td className="p-2">
-                        {exists ? (
-                          <span className="text-xs bg-yellow-900/30 text-yellow-200 px-1 rounded">Exists</span>
-                        ) : (
-                          <span className="text-xs bg-green-900/30 text-green-200 px-1 rounded">New</span>
-                        )}
+                        <span className={`status-badge ${exists ? "status-wishlist" : "status-currently"}`}>
+                          {exists ? "Exists" : "New"}
+                        </span>
                       </td>
                     </tr>
                   );
@@ -2303,7 +2501,7 @@ function ImportModal({ existingEntries, onClose }: { existingEntries: MediaEntry
     return (
       <div className="modal-overlay" onClick={onClose}>
         <div className="modal-content" onClick={e => e.stopPropagation()}>
-          <h2 className="text-xl mb-4 text-center">Import Complete</h2>
+          <h2 className="mb-4 text-center">Import Complete</h2>
           <div className="text-center py-4">
             <p className="text-lg">Imported: <strong>{importedCount}</strong></p>
             <p className="opacity-70">Skipped: {skippedCount}</p>
@@ -2317,7 +2515,7 @@ function ImportModal({ existingEntries, onClose }: { existingEntries: MediaEntry
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={e => e.stopPropagation()}>
-        <h2 className="text-xl mb-4 text-center">Import</h2>
+        <h2 className="mb-4 text-center">Import</h2>
         {entries.length === 0 ? (
           <div className="flex flex-col gap-3">
             <div>
@@ -2332,7 +2530,7 @@ function ImportModal({ existingEntries, onClose }: { existingEntries: MediaEntry
             </div>
             <div className="text-sm opacity-60 mt-2">
               <p>Expected format:</p>
-              <code className="text-xs block bg-white/5 p-2 rounded mt-1">
+              <code className="text-xs block p-2 rounded mt-1" style={{ background: "var(--tape)" }}>
                 title,type,rating,dateWatched,notes,status
               </code>
             </div>
@@ -2354,7 +2552,7 @@ function ImportModal({ existingEntries, onClose }: { existingEntries: MediaEntry
                     <span>Original: {currentEntry.originalRating}/100</span>
                   </div>
                   {currentEntry.notes && (
-                    <p className="text-sm opacity-70 mt-2 italic">"{currentEntry.notes}"</p>
+                    <p className="text-sm opacity-70 mt-2">"{currentEntry.notes}"</p>
                   )}
                 </div>
                 <div>

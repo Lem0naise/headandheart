@@ -19,6 +19,7 @@ export const addCurrentlyItem = mutation({
     notes: v.optional(v.string()),
     totalPages: v.optional(v.number()),
     totalEpisodes: v.optional(v.number()),
+    posterUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -32,6 +33,7 @@ export const addCurrentlyItem = mutation({
       notes: args.notes,
       totalPages: args.totalPages,
       totalEpisodes: args.totalEpisodes,
+      posterUrl: args.posterUrl,
     });
   },
 });
@@ -69,6 +71,7 @@ export const updateCurrentlyItem = mutation({
     notes: v.optional(v.string()),
     totalPages: v.optional(v.number()),
     totalEpisodes: v.optional(v.number()),
+    posterUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -84,6 +87,7 @@ export const updateCurrentlyItem = mutation({
     if (args.notes !== undefined) updates.notes = args.notes;
     if (args.totalPages !== undefined) updates.totalPages = args.totalPages;
     if (args.totalEpisodes !== undefined) updates.totalEpisodes = args.totalEpisodes;
+    if (args.posterUrl !== undefined) updates.posterUrl = args.posterUrl;
     await ctx.db.patch("currentlyItems", args.id, updates);
   },
 });
@@ -115,6 +119,7 @@ export const promoteToCurrently = mutation({
       dateStarted: Date.now(),
       progress: 0,
       notes: wishlistItem.notes,
+      posterUrl: wishlistItem.posterUrl,
     });
     await ctx.db.delete("wishlistItems", args.wishlistItemId);
   },
@@ -144,6 +149,7 @@ export const completeCurrently = mutation({
       heartRating: args.heartRating,
       dateWatched: args.dateWatched,
       notes: args.notes ?? currentlyItem.notes,
+      posterUrl: currentlyItem.posterUrl,
     });
     await ctx.db.delete("currentlyItems", args.currentlyItemId);
   },
@@ -163,6 +169,7 @@ export const demoteCurrently = mutation({
       type: currentlyItem.type,
       dateAdded: Date.now(),
       notes: currentlyItem.notes,
+      posterUrl: currentlyItem.posterUrl,
     });
     await ctx.db.delete("currentlyItems", args.currentlyItemId);
   },
@@ -178,6 +185,7 @@ export const bulkAddCurrentlyItems = mutation({
       notes: v.optional(v.string()),
       totalPages: v.optional(v.number()),
       totalEpisodes: v.optional(v.number()),
+      posterUrl: v.optional(v.string()),
     })),
   },
   handler: async (ctx, args) => {
@@ -194,6 +202,7 @@ export const bulkAddCurrentlyItems = mutation({
         notes: item.notes,
         totalPages: item.totalPages,
         totalEpisodes: item.totalEpisodes,
+        posterUrl: item.posterUrl,
       });
       ids.push(id);
     }

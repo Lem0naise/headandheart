@@ -23,6 +23,7 @@ export default defineSchema({
         heartRating: v.number(), // 1-5 emotional satisfaction
         dateWatched: v.number(), // timestamp
         notes: v.optional(v.string()),
+        posterUrl: v.optional(v.string()),
     })
         .index("by_user", ["userId"])
         .index("by_user_and_type", ["userId", "type"]),
@@ -40,6 +41,7 @@ export default defineSchema({
         ),
         dateAdded: v.number(), // timestamp
         notes: v.optional(v.string()),
+        posterUrl: v.optional(v.string()),
     })
         .index("by_user", ["userId"])
         .index("by_user_and_type", ["userId", "type"]),
@@ -60,6 +62,7 @@ export default defineSchema({
         notes: v.optional(v.string()),
         totalPages: v.optional(v.number()), // for books: total page count
         totalEpisodes: v.optional(v.number()), // for TV shows: total episode count
+        posterUrl: v.optional(v.string()),
     })
         .index("by_user", ["userId"])
         .index("by_user_and_type", ["userId", "type"]),

@@ -110,7 +110,7 @@ export default function ExportModal({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-xl mb-4 text-center">Export Data</h2>
+        <h2 className="mb-4 text-center">Export Data</h2>
 
         <div className="flex flex-col gap-3">
           <div>
@@ -183,7 +183,7 @@ export default function ExportModal({
             </div>
           )}
 
-          <div className="text-sm opacity-50 bg-white/5 rounded-lg p-3 text-center">
+          <div className="margin-note rounded p-3 text-center" style={{ background: "var(--tape)" }}>
             {filtered.length} item{filtered.length !== 1 ? "s" : ""} ready to export
           </div>
 
