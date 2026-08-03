@@ -204,80 +204,6 @@ const MEDIA_TYPES: { value: MediaType; label: string; icon: JSX.Element }[] = [
   { value: "boardgame", label: "Board", icon: Icons.dice },
 ];
 
-const RATING_DESCRIPTIONS = {
-  default: {
-    head: {
-      1: "Broken: Unfinished/Incompetent.",
-      2: "Flawed: Had potential, but failed.",
-      3: "Solid: Well-made.",
-      4: "Exceptional: Stands out from the crowd.",
-      5: "Masterpiece: Flawless/Revolutionary.",
-    },
-    heart: {
-      1: "Painful: I wanted to quit.",
-      2: "Boring: I checked my phone.",
-      3: "Liked: Glad I watched it.",
-      4: "Captivated: I was fully locked in.",
-      5: "Amazing: The most fun I've ever had.",
-    }
-  },
-  book: {
-    head: {
-      1: "Unreadable: Poor grammar/structure.",
-      2: "Weak: Clunky prose or pacing.",
-      3: "Readable: Competent writing.",
-      4: "Beautiful: Eloquent and clever.",
-      5: "Literary: A triumph of language.",
-    },
-    heart: {
-      1: "Dull: I forced myself to finish.",
-      2: "Dry: Educational but dry.",
-      3: "Engaging: Hard to put down.",
-      4: "Gripping: Stayed up all night.",
-      5: "Profound: Changed how I think.",
-    }
-  },
-  videogame: {
-    head: {
-      1: "Broken: Buggy mess.",
-      2: "Clunky: Bad controls/UX.",
-      3: "Functional: Works as intended.",
-      4: "Polished: Tight controls/design.",
-      5: "Perfect: Mechanics are genius.",
-    },
-    heart: {
-      1: "Frustrating: Rage quit.",
-      2: "Grind: Felt like work.",
-      3: "Fun: Good loop.",
-      4: "Addictive: 'Just one more turn'.",
-      5: "Immersive: I lived in this world.",
-    }
-  },
-  boardgame: {
-    head: {
-      1: "Broken: Rules makes no sense.",
-      2: "Unbalanced: Solved/Exploitable.",
-      3: "Balanced: Fair and functional.",
-      4: "Elegant: Smart mechanics.",
-      5: "Genius: Perfect system design.",
-    },
-    heart: {
-      1: "Boring: Everyone checked phones.",
-      2: "Tedious: Too much downtime.",
-      3: "Fun: Good social interactions.",
-      4: "Exciting: Great tension/moments.",
-      5: "Legendary: Talk about it for years.",
-    }
-  }
-} as const;
-
-const RATING_LABELS = {
-  tl: "Cold Perfection",
-  tr: "Transcendental",
-  bl: "Trash",
-  br: "Guilty Pleasure",
-};
-
 function LoadingSkeleton() {
   return (
     <div className="diary-page animate-pulse">
@@ -488,16 +414,6 @@ function Header({
           <span className="logo-icon">{Icons.heart}</span>
           <span className="hidden md:inline">HeadandHeart</span>
         </div>
-        <button
-          className="theme-toggle shrink-0"
-          type="button"
-          onClick={onThemeToggle}
-          aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
-          title={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
-        >
-          <span aria-hidden="true">{theme === "light" ? "☾" : "☀"}</span>
-          <span className="hidden sm:inline">{theme === "light" ? "Dark" : "Light"}</span>
-        </button>
 
         {/* Desktop search + mode */}
         {isAuthenticated && currentView === "home" && (
@@ -561,6 +477,13 @@ function Header({
                 >
                   {Icons.chart}
                   <span>Stats</span>
+                </button>
+                <button
+                  className="dropdown-item"
+                  onClick={() => { onThemeToggle(); setMenuOpen(false); }}
+                >
+                  <span aria-hidden="true">{theme === "light" ? "☾" : "☀"}</span>
+                  <span>{theme === "light" ? "Dark mode" : "Light mode"}</span>
                 </button>
                 <a
                   href="https://indigo.spot"
@@ -954,12 +877,12 @@ function Content({
   return (
     <div className="flex flex-col gap-4">
       <div className="diary-toolbar">
-        <button className="btn btn-primary" onClick={() => setShowAddForm(true)} title="Keyboard shortcut: n or t">
+        <button className="btn btn-primary toolbar-add" onClick={() => setShowAddForm(true)} title="Keyboard shortcut: n or t">
           {Icons.plus}
           <span>Add</span>
         </button>
 
-        <div className="filter-scroll flex-1">
+        <div className="filter-scroll" role="tablist" aria-label="Filter by type">
           <button
             className={`filter-pill ${typeFilter === "all" ? "active" : ""}`}
             onClick={() => setTypeFilter("all")}
@@ -979,7 +902,7 @@ function Content({
         </div>
 
         <select
-          className="select text-xs py-1"
+          className="select text-xs py-1 diary-sort"
           aria-label="Sort entries"
           value={sortOption}
           onChange={(e) => {
@@ -1061,12 +984,6 @@ function Content({
               ? "Start something."
               : "Add something you want."}
           </p>
-          {!searchQuery && (
-            <button className="btn btn-primary" onClick={() => setShowAddForm(true)}>
-              {Icons.plus}
-              <span>Add</span>
-            </button>
-          )}
         </div>
       ) : isLoading ? (
         <LoadingSkeleton />
@@ -1383,15 +1300,9 @@ function EntryModal({ entry, initialType, onClose, onSuccess }: { entry?: MediaE
             <button type="button" onClick={() => setDateWatched(new Date(Date.now() - 86_400_000).toISOString().split("T")[0])}>Yesterday</button>
             <button type="button" onClick={() => setDateWatched(new Date(Date.now() - 7 * 86_400_000).toISOString().split("T")[0])}>Last week</button>
           </div>
-          <div className="quick-picks" aria-label="Quick rating picks">
-            <button type="button" onClick={() => { setHeadRating(4); setHeartRating(5); }}>Loved it</button>
-            <button type="button" onClick={() => { setHeadRating(3); setHeartRating(3); }}>Meh</button>
-            <button type="button" onClick={() => { setHeadRating(2); setHeartRating(1); }}>Not for me</button>
-          </div>
           <RatingGrid
             headRating={headRating}
             heartRating={heartRating}
-            type={type}
             onSelect={(head, heart) => { setHeadRating(head); setHeartRating(heart); }}
           />
           <textarea
@@ -1819,14 +1730,8 @@ function CompleteModal({ item, onClose, onSuccess }: { item: CurrentlyItem; onCl
           <RatingGrid
             headRating={headRating}
             heartRating={heartRating}
-            type={item.type}
             onSelect={(head, heart) => { setHeadRating(head); setHeartRating(heart); }}
           />
-          <div className="quick-picks" aria-label="Quick rating picks">
-            <button type="button" onClick={() => { setHeadRating(4); setHeartRating(5); }}>Loved it</button>
-            <button type="button" onClick={() => { setHeadRating(3); setHeartRating(3); }}>Meh</button>
-            <button type="button" onClick={() => { setHeadRating(2); setHeartRating(1); }}>Not for me</button>
-          </div>
           <input
             className="input w-full"
             type="date"
@@ -1859,18 +1764,12 @@ function CompleteModal({ item, onClose, onSuccess }: { item: CurrentlyItem; onCl
 function RatingGrid({
   headRating,
   heartRating,
-  type,
   onSelect,
 }: {
   headRating: number;
   heartRating: number;
-  type?: MediaType;
   onSelect: (head: number, heart: number) => void;
 }) {
-  const descriptions = (type && type in RATING_DESCRIPTIONS && type !== 'movie' && type !== 'tvshow')
-    ? RATING_DESCRIPTIONS[type as keyof typeof RATING_DESCRIPTIONS]
-    : RATING_DESCRIPTIONS.default;
-
   const cells = [];
   for (let row = 0; row < 5; row++) {
     for (let col = 0; col < 5; col++) {
@@ -1882,7 +1781,10 @@ function RatingGrid({
           key={`${head}-${heart}`}
           className={`rating-cell ${isSelected ? "selected" : ""}`}
           onClick={() => onSelect(head, heart)}
-          title={`Head: ${head} - ${descriptions.head[head as keyof typeof descriptions.head]}\nHeart: ${heart} - ${descriptions.heart[heart as keyof typeof descriptions.heart]}`}
+          title={`Head ${head}, Heart ${heart}`}
+          role="button"
+          aria-label={`Head ${head}, Heart ${heart}`}
+          aria-pressed={isSelected}
         />
       );
     }
@@ -1893,19 +1795,10 @@ function RatingGrid({
       <div className="rating-grid-container">
         <div className="rating-axis left">Head</div>
         <div className="rating-axis bottom">Heart</div>
-        <div className="rating-corner tl">{RATING_LABELS.tl}</div>
-        <div className="rating-corner tr">{RATING_LABELS.tr}</div>
-        <div className="rating-corner bl">{RATING_LABELS.bl}</div>
-        <div className="rating-corner br">{RATING_LABELS.br}</div>
         <div className="rating-grid">{cells}</div>
       </div>
       <div className="rating-display flex flex-col gap-1 text-center text-md">
         <div className="font-bold opacity-75">Head {headRating}/5 · Heart {heartRating}/5</div>
-        <div className="text-md">
-          {descriptions.head[headRating as keyof typeof descriptions.head]}
-          <br />
-          {descriptions.heart[heartRating as keyof typeof descriptions.heart]}
-        </div>
       </div>
     </div>
   );
@@ -1926,20 +1819,6 @@ function formatRelativeDate(timestamp: number) {
   if (days < 31) return `${Math.floor(days / 7)} weeks ago`;
   if (days < 365) return `${Math.floor(days / 30)} months ago`;
   return `${Math.floor(days / 365)} years ago`;
-}
-
-function useCardSwipe(onSwipeRight: () => void, onSwipeLeft: () => void) {
-  const startX = useRef<number | null>(null);
-  return {
-    onTouchStart: (event: React.TouchEvent) => { startX.current = event.touches[0]?.clientX ?? null; },
-    onTouchEnd: (event: React.TouchEvent) => {
-      if (startX.current === null) return;
-      const distance = (event.changedTouches[0]?.clientX ?? startX.current) - startX.current;
-      startX.current = null;
-      if (distance > 72) onSwipeRight();
-      if (distance < -72) onSwipeLeft();
-    },
-  };
 }
 
 function WishlistCard({
@@ -1967,7 +1846,6 @@ function WishlistCard({
   const promoteToCurrently = useMutation(api.currently.promoteToCurrently);
   const [showConfirm, setShowConfirm] = useState(false);
   const [promoting, setPromoting] = useState(false);
-  const swipeHandlers = useCardSwipe(onEdit, () => setShowConfirm(true));
 
   const typeInfo = MEDIA_TYPES.find((t) => t.value === item.type);
 
@@ -1986,7 +1864,7 @@ function WishlistCard({
   };
 
   return (
-    <article className={`wish-sticker card-in type-${item.type}`} style={{ animationDelay: `${index * 40}ms` }} {...swipeHandlers}>
+    <article className={`wish-sticker card-in type-${item.type}`} style={{ animationDelay: `${index * 40}ms` }}>
       {item.posterUrl && <img src={item.posterUrl} alt="" className="diary-poster" style={{ width: "2.6rem", height: "3.7rem" }} />}
 
       <div className="min-w-0 flex-1">
@@ -2081,16 +1959,17 @@ function MediaEntryCard({
   const globalMatched = globalRating?.rating != null;
   const deltaGlobal = globalMatched ? (yourAvg - globalRating.rating!) : null;
   const gr = globalRating;
-  const swipeHandlers = useCardSwipe(onEdit, () => setShowConfirm(true));
 
   return (
     <article
       className={`diary-row card-in type-${entry.type} ${expanded ? "card-expanded" : ""}`}
       style={{ animationDelay: `${index * 40}ms` }}
       onClick={handleExpand}
-      {...swipeHandlers}
     >
-      <div className="diary-date">{dayMonth}</div>
+      <div className="diary-date">
+        <span>{dayMonth}</span>
+        <span className="diary-relative">{formatRelativeDate(entry.dateWatched)}</span>
+      </div>
 
       <div className="diary-body">
         <div className="flex justify-between items-start gap-3">
@@ -2100,9 +1979,8 @@ function MediaEntryCard({
               <h3 className="diary-title">{entry.title}</h3>
               <div className="diary-marks">
                 <span className="mark-type">{typeInfo?.icon} {typeInfo?.label}</span>
-                <span>Head {entry.headRating}</span>
-                <span>Heart {entry.heartRating}</span>
-                <span>{formatRelativeDate(entry.dateWatched)}</span>
+                <span className="mark-rating">Head {entry.headRating}</span>
+                <span className="mark-rating">Heart {entry.heartRating}</span>
               </div>
             </div>
           </div>
@@ -2190,7 +2068,6 @@ function CurrentlyCard({
   const demoteCurrently = useMutation(api.currently.demoteCurrently);
   const [showConfirm, setShowConfirm] = useState(false);
   const [demoting, setDemoting] = useState(false);
-  const swipeHandlers = useCardSwipe(onEdit, () => setShowConfirm(true));
 
   const typeInfo = MEDIA_TYPES.find((t) => t.value === item.type);
 
@@ -2222,7 +2099,7 @@ function CurrentlyCard({
   };
 
   return (
-    <article className={`bookmark-slip card-in type-${item.type}`} style={{ animationDelay: `${index * 40}ms` }} {...swipeHandlers}>
+    <article className={`bookmark-slip card-in type-${item.type}`} style={{ animationDelay: `${index * 40}ms` }}>
       <div className="bookmark-ribbon" />
 
       <div className="flex justify-between items-start gap-3">
@@ -2559,7 +2436,6 @@ function ImportModal({ existingEntries, onClose }: { existingEntries: MediaEntry
                   <RatingGrid
                     headRating={headRating}
                     heartRating={heartRating}
-                    type={currentEntry.type}
                     onSelect={(head, heart) => { setHeadRating(head); setHeartRating(heart); }}
                   />
                 </div>
