@@ -19,8 +19,8 @@ export default defineSchema({
             v.literal("videogame"),
             v.literal("boardgame")
         ),
-        headRating: v.number(), // 1-5 intellectual satisfaction
-        heartRating: v.number(), // 1-5 emotional satisfaction
+        headRating: v.number(), // 0-5 intellectual satisfaction
+        heartRating: v.number(), // 0-5 emotional satisfaction
         dateWatched: v.number(), // timestamp
         notes: v.optional(v.string()),
         posterUrl: v.optional(v.string()),

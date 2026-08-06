@@ -34,7 +34,7 @@ export interface CurrentlyItem {
   posterUrl?: string;
 }
 
-export type LibrarySortOption = "dateNewest" | "dateOldest" | "alphaAZ" | "alphaZA" | "rating";
+export type LibrarySortOption = "dateNewest" | "dateOldest" | "alphaAZ" | "alphaZA" | "rating" | "ratingAscending";
 export type WishlistSortOption = "dateNewest" | "dateOldest" | "alphaAZ" | "alphaZA";
 export type CurrentlySortOption = "dateNewest" | "dateOldest" | "alphaAZ" | "alphaZA";
 

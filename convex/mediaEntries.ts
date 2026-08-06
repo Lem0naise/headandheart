@@ -28,12 +28,12 @@ export const addMediaEntry = mutation({
             throw new Error("Not authenticated");
         }
 
-        // Validate ratings are 1-5
-        if (args.headRating < 1 || args.headRating > 5) {
-            throw new Error("Head rating must be between 1 and 5");
+        // Ratings are deliberate whole-number picks on the 0-5 grid.
+        if (!Number.isInteger(args.headRating) || args.headRating < 0 || args.headRating > 5) {
+            throw new Error("Head rating must be an integer between 0 and 5");
         }
-        if (args.heartRating < 1 || args.heartRating > 5) {
-            throw new Error("Heart rating must be between 1 and 5");
+        if (!Number.isInteger(args.heartRating) || args.heartRating < 0 || args.heartRating > 5) {
+            throw new Error("Heart rating must be an integer between 0 and 5");
         }
 
         const id = await ctx.db.insert("mediaEntries", {
@@ -127,11 +127,11 @@ export const updateMediaEntry = mutation({
         }
 
         // Validate ratings if provided
-        if (args.headRating !== undefined && (args.headRating < 1 || args.headRating > 5)) {
-            throw new Error("Head rating must be between 1 and 5");
+        if (args.headRating !== undefined && (!Number.isInteger(args.headRating) || args.headRating < 0 || args.headRating > 5)) {
+            throw new Error("Head rating must be an integer between 0 and 5");
         }
-        if (args.heartRating !== undefined && (args.heartRating < 1 || args.heartRating > 5)) {
-            throw new Error("Heart rating must be between 1 and 5");
+        if (args.heartRating !== undefined && (!Number.isInteger(args.heartRating) || args.heartRating < 0 || args.heartRating > 5)) {
+            throw new Error("Heart rating must be an integer between 0 and 5");
         }
 
         const updates: Partial<typeof entry> = {};

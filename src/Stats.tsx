@@ -23,8 +23,8 @@ export default function StatsView({ entries, onBack }: StatsProps) {
                     <StatCard label="Logged" value={stats.total.toString()} detail="entries" />
                     <StatCard label="Average" value={stats.averageRating.toFixed(1)} detail="out of 5" />
                     <StatCard label="Top type" value={stats.topTypeLabel} detail={`${stats.topTypeCount} logged`} />
-                    <StatCard label="Streak" value={`${stats.currentStreak}`} detail="days" />
-                    <StatCard label="Types" value={`${stats.typeCount}`} detail="kinds" />
+                    <StatCard label="Streak" value={`${stats.currentStreak}`} detail="weeks" />
+                    
                 </div>
             </section>
 
@@ -100,13 +100,15 @@ export default function StatsView({ entries, onBack }: StatsProps) {
 
                     <Section title="Monthly Activity">
                         <p className="margin-note mb-4">The months when your library grew the most.</p>
-                        {stats.monthlyActivity.map((month) => (
-                            <div className="chart-bar-row" key={month.key}>
+                        <div className="monthly-activity-grid">
+                          {stats.monthlyActivity.map((month) => (
+                            <div className="chart-bar-row monthly-activity-row" key={month.key}>
                                 <span className="text-sm">{month.label}</span>
                                 <div className="chart-bar-track"><div className="chart-bar-fill" style={{ width: `${(month.count / stats.maxMonthlyCount) * 100}%` }} /></div>
                                 <strong>{month.count}</strong>
                             </div>
-                        ))}
+                          ))}
+                        </div>
                         <p className="margin-note mt-4">Busiest month: {stats.prolificMonth.label} ({stats.prolificMonth.count})</p>
                     </Section>
 
@@ -177,7 +179,7 @@ function RatingDistribution({ title, counts, color }: { title: string; counts: n
             <h3 className="stats-section-title">{title}</h3>
             {counts.map((count, index) => (
                 <div className="chart-bar-row" key={index}>
-                    <span>{index + 1} / 5</span>
+                    <span>{index} / 5</span>
                     <div className="chart-bar-track"><div className="chart-bar-fill" style={{ width: `${(count / highest) * 100}%`, background: color }} /></div>
                     <strong>{count}</strong>
                 </div>
@@ -193,16 +195,15 @@ function friendlyType(type: string) {
 // --- Components ---
 
 function TasteGalaxy({ entries }: { entries: MediaEntry[] }) {
-    // Create 5x5 grid counts
-    const grid = Array(5).fill(0).map(() => Array(5).fill(0));
+    // Create 6x6 grid counts for integer ratings 0 through 5.
+    const grid = Array(6).fill(0).map(() => Array(6).fill(0));
     let maxCount = 0;
 
     entries.forEach(e => {
-        // Indices 0-4. Head is Y (inverted in visual, so 5 is top row 0), Heart is X (1 is left col 0)
-        // Visual Grid: Row 0 = Head 5, Row 4 = Head 1.
+        // Head is Y (inverted: 5 is the top row) and Heart is X (0 is left).
         const row = 5 - Math.floor(e.headRating);
-        const col = Math.floor(e.heartRating) - 1;
-        if (row >= 0 && row < 5 && col >= 0 && col < 5) {
+        const col = Math.floor(e.heartRating);
+        if (row >= 0 && row < 6 && col >= 0 && col < 6) {
             grid[row][col]++;
             maxCount = Math.max(maxCount, grid[row][col]);
         }
@@ -210,12 +211,12 @@ function TasteGalaxy({ entries }: { entries: MediaEntry[] }) {
 
     return (
         <div className="relative p-2 rounded inline-block" style={{ border: "var(--stitch)" }}>
-            <div className="grid grid-cols-5 gap-1 w-[250px] h-[250px]">
+            <div className="grid grid-cols-6 gap-1 w-[250px] h-[250px]">
                 {grid.map((row, rIndex) => (
                     row.map((count, cIndex) => {
                         const intensity = maxCount > 0 ? count / maxCount : 0;
-                        const avgRating = ((5 - rIndex) + (cIndex + 1)) / 2;
-                        const hue = 20 + ((avgRating - 1) / 4) * 110;
+                        const avgRating = ((5 - rIndex) + cIndex) / 2;
+                        const hue = 20 + (avgRating / 5) * 110;
                         const cellStyle =
                             count === 0
                                 ? {
@@ -236,7 +237,7 @@ function TasteGalaxy({ entries }: { entries: MediaEntry[] }) {
 
                                 {/* Tooltip */}
                                 <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 hidden group-hover:block text-xs p-1 rounded whitespace-nowrap z-10 pointer-events-none" style={{ background: "var(--paper-surface)", color: "var(--app-text)", border: "var(--stitch)" }}>
-                                    Head: {5 - rIndex}, Heart: {cIndex + 1}
+                                    Head: {5 - rIndex}, Heart: {cIndex}
                                 </div>
                             </div>
                         );
@@ -277,9 +278,9 @@ function MediaScatterPlot({ entries }: { entries: MediaEntry[] }) {
         };
     });
 
-    // Map 1-5 to coordinate space
-    const scale = (val: number) => padding + ((val - 1) / 4) * (size - 2 * padding);
-    const invertScale = (val: number) => size - (padding + ((val - 1) / 4) * (size - 2 * padding));
+    // Map 0-5 to coordinate space.
+    const scale = (val: number) => padding + (val / 5) * (size - 2 * padding);
+    const invertScale = (val: number) => size - (padding + (val / 5) * (size - 2 * padding));
 
     // Color mapping
     const getColor = (t: string) => {
@@ -294,13 +295,13 @@ function MediaScatterPlot({ entries }: { entries: MediaEntry[] }) {
         <div className="w-full max-w-[400px] mx-auto bg-[var(--color-card-dark)] border border-black/10 rounded-xl p-4 aspect-square relative">
             <svg viewBox={`0 0 ${size} ${size}`} className="w-full h-full overflow-visible">
                 {/* Grid Lines */}
-                {[1, 2, 3, 4, 5].map(i => (
+                {[0, 1, 2, 3, 4, 5].map(i => (
                     <g key={i}>
-                        <line x1={scale(1)} y1={invertScale(i)} x2={scale(5)} y2={invertScale(i)} stroke="#ddd" strokeWidth="1" />
-                        <line x1={scale(i)} y1={invertScale(1)} x2={scale(i)} y2={invertScale(5)} stroke="#ddd" strokeWidth="1" />
+                        <line x1={scale(0)} y1={invertScale(i)} x2={scale(5)} y2={invertScale(i)} stroke="#ddd" strokeWidth="1" />
+                        <line x1={scale(i)} y1={invertScale(0)} x2={scale(i)} y2={invertScale(5)} stroke="#ddd" strokeWidth="1" />
                         {/* Labels */}
-                        <text x={scale(1) - 10} y={invertScale(i)} dy="4" textAnchor="end" fontSize="10" fill="#999">{i}</text>
-                        <text x={scale(i)} y={invertScale(1) + 15} textAnchor="middle" fontSize="10" fill="#999">{i}</text>
+                        <text x={scale(0) - 10} y={invertScale(i)} dy="4" textAnchor="end" fontSize="10" fill="#999">{i}</text>
+                        <text x={scale(i)} y={invertScale(0) + 15} textAnchor="middle" fontSize="10" fill="#999">{i}</text>
                     </g>
                 ))}
 
@@ -309,7 +310,7 @@ function MediaScatterPlot({ entries }: { entries: MediaEntry[] }) {
                 <text x={size / 2} y={size - 5} textAnchor="middle" fontSize="12" fill="#666" fontWeight="bold">HEART</text>
 
                 {/* Diagonal Line (y=x) */}
-                <line x1={scale(1)} y1={invertScale(1)} x2={scale(5)} y2={invertScale(5)} stroke="rgba(0,0,0,0.1)" strokeDasharray="4" strokeWidth="2" />
+                <line x1={scale(0)} y1={invertScale(0)} x2={scale(5)} y2={invertScale(5)} stroke="rgba(0,0,0,0.1)" strokeDasharray="4" strokeWidth="2" />
 
                 {/* Points */}
                 {points.map((p) => (
@@ -359,7 +360,7 @@ function TrendLine({ entries, field, color, isPercentage5 }: { entries: MediaEnt
     const width = 300;
     const height = 100;
     const maxY = isPercentage5 ? 100 : 5;
-    const minY = isPercentage5 ? 0 : 1;
+    const minY = 0;
 
     // Map to SVG coordinates
     const getX = (i: number) => (i / (dataPoints.length - 1 || 1)) * width;
@@ -497,11 +498,11 @@ function useStats(entries: MediaEntry[]) {
         const averageHead = entries.reduce((sum, entry) => sum + entry.headRating, 0) / entries.length;
         const averageHeart = entries.reduce((sum, entry) => sum + entry.heartRating, 0) / entries.length;
         const averageRating = (averageHead + averageHeart) / 2;
-        const headDistribution = Array.from({ length: 5 }, (_, index) =>
-            entries.filter((entry) => Math.round(entry.headRating) === index + 1).length
+        const headDistribution = Array.from({ length: 6 }, (_, index) =>
+            entries.filter((entry) => Math.round(entry.headRating) === index).length
         );
-        const heartDistribution = Array.from({ length: 5 }, (_, index) =>
-            entries.filter((entry) => Math.round(entry.heartRating) === index + 1).length
+        const heartDistribution = Array.from({ length: 6 }, (_, index) =>
+            entries.filter((entry) => Math.round(entry.heartRating) === index).length
         );
         const topType = [...perType].sort((a, b) => b.count - a.count)[0];
         const monthlyCounts = new Map<string, { label: string; count: number }>();
@@ -516,18 +517,23 @@ function useStats(entries: MediaEntry[]) {
         });
         const monthlyActivity = [...monthlyCounts.entries()]
             .map(([key, value]) => ({ key, ...value }))
-            .sort((a, b) => a.key.localeCompare(b.key))
-            .slice(-12);
+            .sort((a, b) => a.key.localeCompare(b.key));
         const prolificMonth = [...monthlyActivity].sort((a, b) => b.count - a.count)[0] ?? { label: "—", count: 0 };
         const favorites = [...entries]
             .sort((a, b) => (b.headRating + b.heartRating) - (a.headRating + a.heartRating))
             .slice(0, 5);
-        const loggedDays = new Set(entries.map((entry) => new Date(entry.dateWatched).toDateString()));
+        const weekKey = (date: Date) => {
+            const monday = new Date(date);
+            monday.setHours(0, 0, 0, 0);
+            monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+            return `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, "0")}-${String(monday.getDate()).padStart(2, "0")}`;
+        };
+        const loggedWeeks = new Set(entries.map((entry) => weekKey(new Date(entry.dateWatched))));
         let currentStreak = 0;
-        const day = new Date();
-        while (loggedDays.has(day.toDateString())) {
+        const week = new Date();
+        while (loggedWeeks.has(weekKey(week))) {
             currentStreak++;
-            day.setDate(day.getDate() - 1);
+            week.setDate(week.getDate() - 7);
         }
         const difference = averageHeart - averageHead;
         const personality = difference > 0.35

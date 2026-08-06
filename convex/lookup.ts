@@ -120,8 +120,9 @@ export const searchMedia = action({
     }
     if (args.type === "videogame" || args.type === "boardgame") {
       try {
+        const gameQuery = encodeURIComponent(`${args.query.trim()} ${args.type === "videogame" ? "video game" : "board game"}`);
         const res = await fetchWithRetry(
-          `${WIKI_BASE}?action=query&list=search&srsearch=${q}&format=json&origin=*&srlimit=8`
+          `${WIKI_BASE}?action=query&list=search&srsearch=${gameQuery}&format=json&origin=*&srlimit=8`
         );
         if (!res.ok) {
           console.error(`Wikipedia search failed: ${res.status} ${res.statusText}`);

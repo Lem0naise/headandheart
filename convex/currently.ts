@@ -139,8 +139,8 @@ export const completeCurrently = mutation({
     const currentlyItem = await ctx.db.get("currentlyItems", args.currentlyItemId);
     if (!currentlyItem) throw new Error("Item not found");
     if (currentlyItem.userId !== userId) throw new Error("Not authorized");
-    if (args.headRating < 1 || args.headRating > 5) throw new Error("Head rating must be 1-5");
-    if (args.heartRating < 1 || args.heartRating > 5) throw new Error("Heart rating must be 1-5");
+    if (!Number.isInteger(args.headRating) || args.headRating < 0 || args.headRating > 5) throw new Error("Head rating must be an integer from 0-5");
+    if (!Number.isInteger(args.heartRating) || args.heartRating < 0 || args.heartRating > 5) throw new Error("Heart rating must be an integer from 0-5");
     await ctx.db.insert("mediaEntries", {
       userId,
       title: currentlyItem.title,
