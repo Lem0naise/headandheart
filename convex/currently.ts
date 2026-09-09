@@ -19,6 +19,8 @@ export const addCurrentlyItem = mutation({
     notes: v.optional(v.string()),
     totalPages: v.optional(v.number()),
     totalEpisodes: v.optional(v.number()),
+    currentSeason: v.optional(v.number()),
+    currentEpisode: v.optional(v.number()),
     posterUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -33,6 +35,8 @@ export const addCurrentlyItem = mutation({
       notes: args.notes,
       totalPages: args.totalPages,
       totalEpisodes: args.totalEpisodes,
+      currentSeason: args.currentSeason,
+      currentEpisode: args.currentEpisode,
       posterUrl: args.posterUrl,
     });
   },
@@ -71,6 +75,8 @@ export const updateCurrentlyItem = mutation({
     notes: v.optional(v.string()),
     totalPages: v.optional(v.number()),
     totalEpisodes: v.optional(v.number()),
+    currentSeason: v.optional(v.number()),
+    currentEpisode: v.optional(v.number()),
     posterUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -87,6 +93,8 @@ export const updateCurrentlyItem = mutation({
     if (args.notes !== undefined) updates.notes = args.notes;
     if (args.totalPages !== undefined) updates.totalPages = args.totalPages;
     if (args.totalEpisodes !== undefined) updates.totalEpisodes = args.totalEpisodes;
+    if (args.currentSeason !== undefined) updates.currentSeason = args.currentSeason;
+    if (args.currentEpisode !== undefined) updates.currentEpisode = args.currentEpisode;
     if (args.posterUrl !== undefined) updates.posterUrl = args.posterUrl;
     await ctx.db.patch("currentlyItems", args.id, updates);
   },
@@ -185,6 +193,8 @@ export const bulkAddCurrentlyItems = mutation({
       notes: v.optional(v.string()),
       totalPages: v.optional(v.number()),
       totalEpisodes: v.optional(v.number()),
+      currentSeason: v.optional(v.number()),
+      currentEpisode: v.optional(v.number()),
       posterUrl: v.optional(v.string()),
     })),
   },
@@ -202,6 +212,8 @@ export const bulkAddCurrentlyItems = mutation({
         notes: item.notes,
         totalPages: item.totalPages,
         totalEpisodes: item.totalEpisodes,
+        currentSeason: item.currentSeason,
+        currentEpisode: item.currentEpisode,
         posterUrl: item.posterUrl,
       });
       ids.push(id);

@@ -279,6 +279,8 @@ body {
   background: none;
   color: inherit;
   font: inherit;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 9rem;
 }
 
 .diary-row:last-child {
@@ -392,6 +394,8 @@ body {
   background: var(--paper-surface);
   display: flex;
   flex-direction: column;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 17rem;
 }
 
 .bookmark-ribbon {
@@ -413,6 +417,8 @@ body {
   gap: 0.85rem;
   align-items: flex-start;
   background: color-mix(in srgb, var(--paper-surface) 88%, var(--type-accent, var(--color-primary)) 12%);
+  content-visibility: auto;
+  contain-intrinsic-size: auto 10rem;
 }
 
 .page-sheet {

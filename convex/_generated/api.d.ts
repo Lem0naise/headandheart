@@ -14,6 +14,7 @@ import type * as http from "../http.js";
 import type * as lookup from "../lookup.js";
 import type * as mediaEntries from "../mediaEntries.js";
 import type * as mediaImport from "../mediaImport.js";
+import type * as users from "../users.js";
 import type * as wishlist from "../wishlist.js";
 
 import type {
@@ -29,6 +30,7 @@ declare const fullApi: ApiFromModules<{
   lookup: typeof lookup;
   mediaEntries: typeof mediaEntries;
   mediaImport: typeof mediaImport;
+  users: typeof users;
   wishlist: typeof wishlist;
 }>;
 

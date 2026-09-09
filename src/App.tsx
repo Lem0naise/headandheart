@@ -1,8 +1,6 @@
 "use client";
 
 import {
-  Authenticated,
-  Unauthenticated,
   useConvexAuth,
   useMutation,
   useQuery,
@@ -57,6 +55,30 @@ const invalidateWishlistCache = () => invalidateCacheKey(WISHLIST_CACHE_KEY);
 const getCachedCurrentlyItems = () => getCached<CurrentlyItem>(CURRENTLY_CACHE_KEY);
 const setCachedCurrentlyItems = (data: CurrentlyItem[], filter?: string) => setCached(CURRENTLY_CACHE_KEY, data, filter);
 const invalidateCurrentlyCache = () => invalidateCacheKey(CURRENTLY_CACHE_KEY);
+
+// Cache ownership — scopes caches to the last authenticated user.
+const CACHE_OWNER_KEY = "headandheart_cache_owner_v1";
+
+function getCacheOwner(): string | null {
+  try {
+    const raw = localStorage.getItem(CACHE_OWNER_KEY);
+    if (!raw) return null;
+    return (JSON.parse(raw) as { userId: string }).userId ?? null;
+  } catch { return null; }
+}
+
+function setCacheOwner(userId: string) {
+  try {
+    localStorage.setItem(CACHE_OWNER_KEY, JSON.stringify({ userId }));
+  } catch { /* ignore */ }
+}
+
+/** Clears every media cache and the ownership marker. Call before signing out. */
+function clearAllCaches() {
+  [CACHE_KEY, WISHLIST_CACHE_KEY, CURRENTLY_CACHE_KEY, CACHE_OWNER_KEY].forEach((k) => {
+    try { localStorage.removeItem(k); } catch { /* ignore */ }
+  });
+}
 
 const Icons = {
   logo: (
@@ -292,13 +314,31 @@ class ViewErrorBoundary extends Component<{ children: ReactNode }, { failed: boo
   }
 }
 
+/** Runs inside the authenticated tree. Reconciles the cache owner with the live userId. */
+function ReconcileUserId() {
+  const userId = useQuery(api.users.getCurrentUserId);
+  useEffect(() => {
+    if (!userId) return;
+    const owner = getCacheOwner();
+    if (owner !== null && owner !== userId) {
+      // Different user logged in — discard stale caches.
+      clearAllCaches();
+    }
+    setCacheOwner(userId);
+  }, [userId]);
+  return null;
+}
+
 export default function App() {
+  const { isLoading: authLoading, isAuthenticated } = useConvexAuth();
   const [view, setView] = useState<View>("home");
   const [searchQuery, setSearchQuery] = useState("");
   const [mode, setMode] = useState<AppMode>("library");
   const [theme, toggleTheme] = useTheme();
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [cachedData, setCachedData] = useState<{ data: MediaEntry[]; filter?: string } | null>(() => getCachedEntries());
+  // Snapshot the cache owner at mount time so we know whether to show pre-auth data.
+  const [cacheOwner] = useState(() => getCacheOwner());
   const shouldLoadAllMedia = Boolean(deferredSearchQuery.trim());
   const allMedia = useQuery(
     // @ts-expect-error - Convex "skip" pattern is not included in the hook type.
@@ -309,6 +349,21 @@ export default function App() {
   const handleEntriesUpdate = useCallback((data: MediaEntry[], filter?: string) => {
     setCachedData({ data, filter });
   }, []);
+
+  // While Convex auth is still resolving, show cached data for returning users.
+  const showSnapshot = authLoading && cacheOwner !== null;
+  // Normal authenticated view once Convex confirms identity.
+  const showAuthenticated = !authLoading && isAuthenticated;
+  // Login screen for unauthenticated visitors (or after sign-out).
+  const showWelcome = !authLoading && !isAuthenticated;
+
+  const sharedContentProps = {
+    mode,
+    onModeChange: setMode,
+    cachedData,
+    onEntriesUpdate: handleEntriesUpdate,
+    globalResults: allMedia,
+  };
 
   return (
     <>
@@ -321,33 +376,43 @@ export default function App() {
         onSearchChange={setSearchQuery}
         theme={theme}
         onThemeToggle={toggleTheme}
+        isEffectivelyAuthenticated={showSnapshot || isAuthenticated}
       />
       <main className="p-3 md:p-6 max-w-5xl mx-auto">
-        <Authenticated>
-          {view === "home" ? (
-            <Content
-              mode={mode}
-              onModeChange={setMode}
-              searchQuery={deferredSearchQuery}
-              cachedData={cachedData}
-              onEntriesUpdate={handleEntriesUpdate}
-              globalResults={allMedia}
-            />
-          ) : (
-            <ViewErrorBoundary>
-              <Suspense fallback={<StatsLoadingSkeleton />}>
-                <StatsLoader
-                  onBack={() => setView("home")}
-                  cachedData={cachedData}
-                  onEntriesUpdate={handleEntriesUpdate}
-                />
-              </Suspense>
-            </ViewErrorBoundary>
-          )}
-        </Authenticated>
-        <Unauthenticated>
-          <WelcomeSection />
-        </Unauthenticated>
+        {/* Read-only snapshot rendered while Convex auth resolves (returning users only) */}
+        {showSnapshot && (
+          <Content
+            {...sharedContentProps}
+            searchQuery={deferredSearchQuery}
+            readOnly
+          />
+        )}
+
+        {/* Live authenticated content */}
+        {showAuthenticated && (
+          <>
+            <ReconcileUserId />
+            {view === "home" ? (
+              <Content
+                {...sharedContentProps}
+                searchQuery={deferredSearchQuery}
+              />
+            ) : (
+              <ViewErrorBoundary>
+                <Suspense fallback={<StatsLoadingSkeleton />}>
+                  <StatsLoader
+                    onBack={() => setView("home")}
+                    cachedData={cachedData}
+                    onEntriesUpdate={handleEntriesUpdate}
+                  />
+                </Suspense>
+              </ViewErrorBoundary>
+            )}
+          </>
+        )}
+
+        {/* Welcome / sign-in for unauthenticated visitors */}
+        {showWelcome && <WelcomeSection />}
       </main>
     </>
   );
@@ -392,6 +457,7 @@ function Header({
   onSearchChange,
   theme,
   onThemeToggle,
+  isEffectivelyAuthenticated,
 }: {
   currentView?: View;
   onViewChange?: (v: View) => void;
@@ -401,8 +467,11 @@ function Header({
   onSearchChange: (q: string) => void;
   theme: Theme;
   onThemeToggle: () => void;
+  /** Override for pre-auth snapshot: treat user as authenticated for UI display. */
+  isEffectivelyAuthenticated?: boolean;
 }) {
-  const { isAuthenticated } = useConvexAuth();
+  const { isAuthenticated: convexIsAuth } = useConvexAuth();
+  const isAuthenticated = isEffectivelyAuthenticated ?? convexIsAuth;
   const { signOut } = useAuthActions();
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -517,7 +586,7 @@ function Header({
                 <div className="dropdown-divider" />
                 <button
                   className="dropdown-item"
-                  onClick={() => { void signOut(); setMenuOpen(false); }}
+                  onClick={() => { clearAllCaches(); void signOut(); setMenuOpen(false); }}
                 >
                   {Icons.signOut}
                   <span>Sign Out</span>
@@ -635,6 +704,7 @@ function Content({
   cachedData,
   onEntriesUpdate,
   globalResults,
+  readOnly,
 }: {
   mode: AppMode;
   onModeChange: (m: AppMode) => void;
@@ -642,6 +712,8 @@ function Content({
   cachedData: { data: MediaEntry[]; filter?: string } | null;
   onEntriesUpdate: (entries: MediaEntry[], filter?: string) => void;
   globalResults: UnifiedMedia[] | undefined;
+  /** When true, renders cached data read-only (no mutations, no modals). Used during pre-auth snapshot. */
+  readOnly?: boolean;
 }) {
   const isLibrary = mode === "library";
   const isCurrently = mode === "currently";
@@ -863,8 +935,8 @@ function Content({
 
       if (modalOpen || isInput) return;
 
-      // 'n' or 't' to add new item
-      if (key === 'n' || key === 't') {
+      // 'n' or 't' to add new item (disabled in read-only snapshot)
+      if ((key === 'n' || key === 't') && !readOnly) {
         e.preventDefault();
         setShowAddForm(true);
         return;
@@ -873,15 +945,17 @@ function Content({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onModeChange]);
+  }, [onModeChange, readOnly]);
 
   return (
     <div className="flex flex-col gap-4">
       <div className="diary-toolbar">
-        <button className="btn btn-primary toolbar-add" onClick={() => setShowAddForm(true)} title="Keyboard shortcut: n or t">
-          {Icons.plus}
-          <span>Add</span>
-        </button>
+        {!readOnly && (
+          <button className="btn btn-primary toolbar-add" onClick={() => setShowAddForm(true)} title="Keyboard shortcut: n or t">
+            {Icons.plus}
+            <span>Add</span>
+          </button>
+        )}
 
         <div className="filter-scroll" role="tablist" aria-label="Filter by type">
           <button
@@ -938,15 +1012,15 @@ function Content({
         )}
       </div>
 
-      {showAddForm && isLibrary && <EntryModal initialType={typeFilter === "all" ? undefined : typeFilter} onClose={() => setShowAddForm(false)} onSuccess={setToast} />}
-      {showAddForm && isCurrently && <CurrentlyModal initialType={typeFilter === "all" ? undefined : typeFilter} onClose={() => setShowAddForm(false)} onSuccess={setToast} />}
-      {showAddForm && isWishlist && <WishlistModal initialType={typeFilter === "all" ? undefined : typeFilter} onClose={() => setShowAddForm(false)} onSuccess={setToast} />}
-      {showImport && <ImportModal onClose={() => setShowImport(false)} />}
-      {editingEntry && <EntryModal entry={editingEntry} onClose={() => setEditingEntry(null)} onSuccess={setToast} />}
-      {editingWishlist && <WishlistModal item={editingWishlist} onClose={() => setEditingWishlist(null)} onSuccess={setToast} />}
-      {editingCurrently && <CurrentlyModal item={editingCurrently} onClose={() => setEditingCurrently(null)} onSuccess={setToast} />}
-      {completingItem && <CompleteModal item={completingItem} onClose={() => setCompletingItem(null)} onSuccess={setToast} />}
-      {showExport && (
+      {!readOnly && showAddForm && isLibrary && <EntryModal initialType={typeFilter === "all" ? undefined : typeFilter} onClose={() => setShowAddForm(false)} onSuccess={setToast} />}
+      {!readOnly && showAddForm && isCurrently && <CurrentlyModal initialType={typeFilter === "all" ? undefined : typeFilter} onClose={() => setShowAddForm(false)} onSuccess={setToast} />}
+      {!readOnly && showAddForm && isWishlist && <WishlistModal initialType={typeFilter === "all" ? undefined : typeFilter} onClose={() => setShowAddForm(false)} onSuccess={setToast} />}
+      {!readOnly && showImport && <ImportModal onClose={() => setShowImport(false)} />}
+      {!readOnly && editingEntry && <EntryModal entry={editingEntry} onClose={() => setEditingEntry(null)} onSuccess={setToast} />}
+      {!readOnly && editingWishlist && <WishlistModal item={editingWishlist} onClose={() => setEditingWishlist(null)} onSuccess={setToast} />}
+      {!readOnly && editingCurrently && <CurrentlyModal item={editingCurrently} onClose={() => setEditingCurrently(null)} onSuccess={setToast} />}
+      {!readOnly && completingItem && <CompleteModal item={completingItem} onClose={() => setCompletingItem(null)} onSuccess={setToast} />}
+      {!readOnly && showExport && (
         <Suspense fallback={null}>
           <ExportModal onClose={() => setShowExport(false)} />
         </Suspense>
@@ -961,6 +1035,7 @@ function Content({
           onEditCurrently={setEditingCurrently}
           onComplete={setCompletingItem}
           onToast={setToast}
+          readOnly={readOnly}
         />
       ) : !isLoading && displayCount === 0 ? (
         <div className="empty-state">
@@ -995,6 +1070,7 @@ function Content({
               onEdit={() => setEditingEntry(entry)}
               index={i}
               onToast={setToast}
+              readOnly={readOnly}
             />
           ))}
           {isWishlist && sortedWishlistItems.map((item, i) => (
@@ -1004,6 +1080,7 @@ function Content({
               onEdit={() => setEditingWishlist(item)}
               index={i}
               onToast={setToast}
+              readOnly={readOnly}
             />
           ))}
           {isCurrently && sortedCurrentlyItems.map((item, i) => (
@@ -1014,6 +1091,7 @@ function Content({
               onComplete={() => setCompletingItem(item)}
               index={i}
               onToast={setToast}
+              readOnly={readOnly}
             />
           ))}
         </div>
@@ -1031,6 +1109,7 @@ function GlobalSearchResults({
   onEditCurrently,
   onComplete,
   onToast,
+  readOnly,
 }: {
   results: UnifiedMedia[];
   isLoading: boolean;
@@ -1039,6 +1118,7 @@ function GlobalSearchResults({
   onEditCurrently: (item: CurrentlyItem) => void;
   onComplete: (item: CurrentlyItem) => void;
   onToast: (message: string) => void;
+  readOnly?: boolean;
 }) {
   if (isLoading) return <LoadingSkeleton />;
   if (results.length === 0) {
@@ -1056,11 +1136,11 @@ function GlobalSearchResults({
         {results.length} match{results.length === 1 ? "" : "es"}
       </p>
       {results.map((item, index) => item.status === "library" ? (
-        <MediaEntryCard key={`library-${item._id}`} entry={item as MediaEntry} headWeight={50} onEdit={() => onEditEntry(item as MediaEntry)} index={index} onToast={onToast} />
+        <MediaEntryCard key={`library-${item._id}`} entry={item as MediaEntry} headWeight={50} onEdit={() => onEditEntry(item as MediaEntry)} index={index} onToast={onToast} readOnly={readOnly} />
       ) : item.status === "wishlist" ? (
-        <WishlistCard key={`wishlist-${item._id}`} item={item as WishlistItem} onEdit={() => onEditWishlist(item as WishlistItem)} index={index} onToast={onToast} />
+        <WishlistCard key={`wishlist-${item._id}`} item={item as WishlistItem} onEdit={() => onEditWishlist(item as WishlistItem)} index={index} onToast={onToast} readOnly={readOnly} />
       ) : (
-        <CurrentlyCard key={`currently-${item._id}`} item={item as CurrentlyItem} onEdit={() => onEditCurrently(item as CurrentlyItem)} onComplete={() => onComplete(item as CurrentlyItem)} index={index} onToast={onToast} />
+        <CurrentlyCard key={`currently-${item._id}`} item={item as CurrentlyItem} onEdit={() => onEditCurrently(item as CurrentlyItem)} onComplete={() => onComplete(item as CurrentlyItem)} index={index} onToast={onToast} readOnly={readOnly} />
       ))}
     </section>
   );
@@ -1477,6 +1557,11 @@ function CurrentlyModal({ item, initialType, onClose, onSuccess }: { item?: Curr
   const [progress, setProgress] = useState(item?.progress ?? 0);
   const [totalPages, setTotalPages] = useState(item?.totalPages ?? 0);
   const [totalEpisodes, setTotalEpisodes] = useState(item?.totalEpisodes ?? 0);
+  const [currentSeason, setCurrentSeason] = useState(item?.currentSeason ?? 0);
+  const [currentEpisode, setCurrentEpisode] = useState(item?.currentEpisode ?? 0);
+  const [useSeasonEpisode, setUseSeasonEpisode] = useState(
+    item?.currentSeason != null || item?.currentEpisode != null,
+  );
   const [notes, setNotes] = useState(item?.notes ?? "");
   const [posterUrl, setPosterUrl] = useState(item?.posterUrl);
   const [loading, setLoading] = useState(false);
@@ -1497,6 +1582,10 @@ function CurrentlyModal({ item, initialType, onClose, onSuccess }: { item?: Curr
       const payload: Record<string, unknown> = { title: title.trim(), type, dateStarted: new Date(dateStarted).getTime(), progress, notes: notes.trim() || undefined, posterUrl };
       if (type === "book" && totalPages > 0) payload.totalPages = totalPages;
       if (type === "tvshow" && totalEpisodes > 0) payload.totalEpisodes = totalEpisodes;
+      if (type === "tvshow" && useSeasonEpisode) {
+        if (currentSeason > 0) payload.currentSeason = currentSeason;
+        if (currentEpisode > 0) payload.currentEpisode = currentEpisode;
+      }
       if (isEditing) {
         await updateItem({ id: item._id, ...payload } as Parameters<typeof updateItem>[0]);
       } else {
@@ -1521,6 +1610,10 @@ function CurrentlyModal({ item, initialType, onClose, onSuccess }: { item?: Curr
       const itemPayload: Record<string, unknown> = { title: "", type, dateStarted: new Date(dateStarted).getTime(), progress, notes: notes.trim() || undefined };
       if (type === "book" && totalPages > 0) itemPayload.totalPages = totalPages;
       if (type === "tvshow" && totalEpisodes > 0) itemPayload.totalEpisodes = totalEpisodes;
+      if (type === "tvshow" && useSeasonEpisode) {
+        if (currentSeason > 0) itemPayload.currentSeason = currentSeason;
+        if (currentEpisode > 0) itemPayload.currentEpisode = currentEpisode;
+      }
       await bulkAdd({
         items: lines.map(title => ({ ...itemPayload, title })),
       } as Parameters<typeof bulkAdd>[0]);
@@ -1565,15 +1658,28 @@ function CurrentlyModal({ item, initialType, onClose, onSuccess }: { item?: Curr
             </div>
             {type === "book" || type === "tvshow" ? (
               <div>
-                <label className="text-sm opacity-70">
-                  {type === "book" ? "Page progress" : "Episode progress"}
-                </label>
-                <div className="flex gap-2 items-center">
-                  <input className="input flex-1" type="number" min="0" value={progress || ""} onChange={(e) => setProgress(Number(e.target.value))} placeholder={type === "book" ? "Page" : "Ep"} />
-                  <span className="opacity-40 text-sm">/</span>
-                  <input className="input flex-1" type="number" min="1" value={type === "book" ? (totalPages || "") : (totalEpisodes || "")} onChange={(e) => type === "book" ? setTotalPages(Number(e.target.value)) : setTotalEpisodes(Number(e.target.value))} placeholder="Total" />
-                </div>
-                {trackedTotal > 0 && (
+                {type === "tvshow" && (
+                  <label className="flex items-center gap-2 text-sm opacity-70 mb-2">
+                    <input type="checkbox" checked={useSeasonEpisode} onChange={(e) => setUseSeasonEpisode(e.target.checked)} />
+                    Track by season and episode
+                  </label>
+                )}
+                {type === "tvshow" && useSeasonEpisode ? (
+                  <div className="flex gap-2 items-center">
+                    <input className="input flex-1" type="number" min="1" value={currentSeason || ""} onChange={(e) => setCurrentSeason(Number(e.target.value))} placeholder="Season" />
+                    <input className="input flex-1" type="number" min="1" value={currentEpisode || ""} onChange={(e) => setCurrentEpisode(Number(e.target.value))} placeholder="Episode" />
+                  </div>
+                ) : (
+                  <>
+                    <label className="text-sm opacity-70">{type === "book" ? "Page progress" : "Episode progress"}</label>
+                    <div className="flex gap-2 items-center">
+                      <input className="input flex-1" type="number" min="0" value={progress || ""} onChange={(e) => setProgress(Number(e.target.value))} placeholder={type === "book" ? "Page" : "Ep"} />
+                      <span className="opacity-40 text-sm">/</span>
+                      <input className="input flex-1" type="number" min="1" value={type === "book" ? (totalPages || "") : (totalEpisodes || "")} onChange={(e) => type === "book" ? setTotalPages(Number(e.target.value)) : setTotalEpisodes(Number(e.target.value))} placeholder="Total" />
+                    </div>
+                  </>
+                )}
+                {!(type === "tvshow" && useSeasonEpisode) && trackedTotal > 0 && (
                   <div className="progress-bar mt-2">
                     <div className="progress-fill" style={{ width: `${effectiveProgress}%` }} />
                   </div>
@@ -1623,29 +1729,28 @@ function CurrentlyModal({ item, initialType, onClose, onSuccess }: { item?: Curr
             <MediaSearchAutocomplete value={title} type={type} autoFocus={!isEditing} onChange={setTitle} onPick={(result) => { setPosterUrl(result.poster); setType(result.type); }} />
             {type === "book" || type === "tvshow" ? (
               <div>
-                <label className="text-sm opacity-70">
-                  {type === "book" ? "Page progress" : "Episode progress"}
-                </label>
-                <div className="flex gap-2 items-center">
-                  <input
-                    className="input flex-1"
-                    type="number"
-                    min="0"
-                    value={progress || ""}
-                    onChange={(e) => setProgress(Number(e.target.value))}
-                    placeholder={type === "book" ? "Page" : "Ep"}
-                  />
-                  <span className="opacity-40 text-sm">/</span>
-                  <input
-                    className="input flex-1"
-                    type="number"
-                    min="1"
-                    value={type === "book" ? (totalPages || "") : (totalEpisodes || "")}
-                    onChange={(e) => type === "book" ? setTotalPages(Number(e.target.value)) : setTotalEpisodes(Number(e.target.value))}
-                    placeholder="Total"
-                  />
-                </div>
-                {trackedTotal > 0 && (
+                {type === "tvshow" && (
+                  <label className="flex items-center gap-2 text-sm opacity-70 mb-2">
+                    <input type="checkbox" checked={useSeasonEpisode} onChange={(e) => setUseSeasonEpisode(e.target.checked)} />
+                    Track by season and episode
+                  </label>
+                )}
+                {type === "tvshow" && useSeasonEpisode ? (
+                  <div className="flex gap-2 items-center">
+                    <input className="input flex-1" type="number" min="1" value={currentSeason || ""} onChange={(e) => setCurrentSeason(Number(e.target.value))} placeholder="Season" />
+                    <input className="input flex-1" type="number" min="1" value={currentEpisode || ""} onChange={(e) => setCurrentEpisode(Number(e.target.value))} placeholder="Episode" />
+                  </div>
+                ) : (
+                  <>
+                    <label className="text-sm opacity-70">{type === "book" ? "Page progress" : "Episode progress"}</label>
+                    <div className="flex gap-2 items-center">
+                      <input className="input flex-1" type="number" min="0" value={progress || ""} onChange={(e) => setProgress(Number(e.target.value))} placeholder={type === "book" ? "Page" : "Ep"} />
+                      <span className="opacity-40 text-sm">/</span>
+                      <input className="input flex-1" type="number" min="1" value={type === "book" ? (totalPages || "") : (totalEpisodes || "")} onChange={(e) => type === "book" ? setTotalPages(Number(e.target.value)) : setTotalEpisodes(Number(e.target.value))} placeholder="Total" />
+                    </div>
+                  </>
+                )}
+                {!(type === "tvshow" && useSeasonEpisode) && trackedTotal > 0 && (
                   <div className="progress-bar mt-2">
                     <div className="progress-fill" style={{ width: `${effectiveProgress}%` }} />
                   </div>
@@ -1821,11 +1926,13 @@ function WishlistCard({
   onEdit,
   index,
   onToast,
+  readOnly,
 }: {
   item: WishlistItem;
   onEdit: () => void;
   index: number;
   onToast?: (message: string) => void;
+  readOnly?: boolean;
 }) {
   const deleteItem = useMutation(api.wishlist.deleteWishlistItem).withOptimisticUpdate((store, args) => {
     for (const query of store.getAllQueries(api.wishlist.getWishlistItems)) {
@@ -1860,7 +1967,7 @@ function WishlistCard({
 
   return (
     <article className={`wish-sticker card-in type-${item.type}`} style={{ animationDelay: `${index * 40}ms` }}>
-      {item.posterUrl && <img src={item.posterUrl} alt="" className="diary-poster" style={{ width: "2.6rem", height: "3.7rem" }} />}
+      {item.posterUrl && <img src={item.posterUrl} alt="" className="diary-poster" style={{ width: "2.6rem", height: "3.7rem" }} loading="lazy" decoding="async" />}
 
       <div className="min-w-0 flex-1">
         <h3 className="diary-title" style={{ fontSize: "1.2rem" }}>{item.title}</h3>
@@ -1871,17 +1978,19 @@ function WishlistCard({
         {item.notes && <p className="diary-notes">"{item.notes}"</p>}
       </div>
 
-      <div className="flex flex-col items-end gap-1.5 shrink-0">
-        <button className="btn btn-accent btn-sm" onClick={() => { void handleStart(); }} disabled={promoting} aria-label={`Start ${item.title}`}>
-          {Icons.play} {promoting ? "..." : "Start"}
-        </button>
-        <div className="entry-actions">
-          <button onClick={onEdit} title="Edit" aria-label={`Edit ${item.title}`}>{Icons.edit}</button>
-          <button onClick={() => setShowConfirm(true)} title="Delete" aria-label={`Delete ${item.title}`}>{Icons.trash}</button>
+      {!readOnly && (
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
+          <button className="btn btn-accent btn-sm" onClick={() => { void handleStart(); }} disabled={promoting} aria-label={`Start ${item.title}`}>
+            {Icons.play} {promoting ? "..." : "Start"}
+          </button>
+          <div className="entry-actions">
+            <button onClick={onEdit} title="Edit" aria-label={`Edit ${item.title}`}>{Icons.edit}</button>
+            <button onClick={() => setShowConfirm(true)} title="Delete" aria-label={`Delete ${item.title}`}>{Icons.trash}</button>
+          </div>
         </div>
-      </div>
+      )}
 
-      {showConfirm && (
+      {!readOnly && showConfirm && (
         <div className="confirm-overlay">
           <p className="margin-note">Delete?</p>
           <div className="flex gap-2">
@@ -1905,12 +2014,14 @@ function MediaEntryCard({
   onEdit,
   index,
   onToast,
+  readOnly,
 }: {
   entry: MediaEntry;
   headWeight: number;
   onEdit: () => void;
   index: number;
   onToast?: (message: string) => void;
+  readOnly?: boolean;
 }) {
   const deleteEntry = useMutation(api.mediaEntries.deleteMediaEntry).withOptimisticUpdate((store, args) => {
     for (const query of store.getAllQueries(api.mediaEntries.getMediaEntries)) {
@@ -1969,7 +2080,7 @@ function MediaEntryCard({
       <div className="diary-body">
         <div className="flex justify-between items-start gap-3">
           <div className="flex gap-3 min-w-0">
-            {entry.posterUrl && <img src={entry.posterUrl} alt="" className="diary-poster" />}
+            {entry.posterUrl && <img src={entry.posterUrl} alt="" className="diary-poster" loading="lazy" decoding="async" />}
             <div className="min-w-0">
               <h3 className="diary-title">{entry.title}</h3>
               <div className="diary-marks">
@@ -1981,10 +2092,12 @@ function MediaEntryCard({
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <span className="diary-score is-rated" style={getRatingColorVars(totalScore)}>{totalScore.toFixed(1)}</span>
-            <div className="entry-actions" onClick={(e) => e.stopPropagation()}>
-              <button onClick={onEdit} title="Edit" aria-label={`Edit ${entry.title}`}>{Icons.edit}</button>
-              <button onClick={() => setShowConfirm(true)} title="Delete" aria-label={`Delete ${entry.title}`}>{Icons.trash}</button>
-            </div>
+            {!readOnly && (
+              <div className="entry-actions" onClick={(e) => e.stopPropagation()}>
+                <button onClick={onEdit} title="Edit" aria-label={`Edit ${entry.title}`}>{Icons.edit}</button>
+                <button onClick={() => setShowConfirm(true)} title="Delete" aria-label={`Delete ${entry.title}`}>{Icons.trash}</button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -2018,7 +2131,7 @@ function MediaEntryCard({
         </div>
       </div>
 
-      {showConfirm && (
+      {!readOnly && showConfirm && (
         <div className="confirm-overlay" onClick={(e) => e.stopPropagation()}>
           <p className="margin-note">Delete?</p>
           <div className="flex gap-2">
@@ -2041,12 +2154,14 @@ function CurrentlyCard({
   onComplete,
   index,
   onToast,
+  readOnly,
 }: {
   item: CurrentlyItem;
   onEdit: () => void;
   onComplete: () => void;
   index: number;
   onToast?: (message: string) => void;
+  readOnly?: boolean;
 }) {
   const deleteItem = useMutation(api.currently.deleteCurrentlyItem).withOptimisticUpdate((store, args) => {
     for (const query of store.getAllQueries(api.currently.getCurrentlyItems)) {
@@ -2067,6 +2182,7 @@ function CurrentlyCard({
 
   const isBookTracked = item.type === "book" && item.totalPages != null && item.totalPages > 0;
   const isTVTracked = item.type === "tvshow" && item.totalEpisodes != null && item.totalEpisodes > 0;
+  const isSeasonEpisodeTracked = item.type === "tvshow" && (item.currentSeason != null || item.currentEpisode != null);
   const displayProgress = isBookTracked
     ? Math.min(100, Math.round((item.progress / item.totalPages!) * 100))
     : isTVTracked
@@ -2074,6 +2190,8 @@ function CurrentlyCard({
     : item.progress;
   const progressLabel = isBookTracked
     ? `${item.progress} / ${item.totalPages} pages`
+    : isSeasonEpisodeTracked
+    ? `S${item.currentSeason ?? 1} E${item.currentEpisode ?? item.progress}`
     : isTVTracked
     ? `E${item.progress} / ${item.totalEpisodes} eps`
     : `${item.progress}%`;
@@ -2098,7 +2216,7 @@ function CurrentlyCard({
 
       <div className="flex justify-between items-start gap-3">
         <div className="flex gap-3 min-w-0">
-          {item.posterUrl && <img src={item.posterUrl} alt="" className="diary-poster" />}
+          {item.posterUrl && <img src={item.posterUrl} alt="" className="diary-poster" loading="lazy" decoding="async" />}
           <div className="min-w-0">
             <h3 className="diary-title">{item.title}</h3>
             <div className="diary-marks">
@@ -2107,32 +2225,38 @@ function CurrentlyCard({
             </div>
           </div>
         </div>
-        <div className="entry-actions shrink-0">
-          <button onClick={onEdit} title="Edit" aria-label={`Edit ${item.title}`}>{Icons.edit}</button>
-          <button onClick={() => setShowConfirm(true)} title="Delete" aria-label={`Delete ${item.title}`}>{Icons.trash}</button>
-        </div>
+        {!readOnly && (
+          <div className="entry-actions shrink-0">
+            <button onClick={onEdit} title="Edit" aria-label={`Edit ${item.title}`}>{Icons.edit}</button>
+            <button onClick={() => setShowConfirm(true)} title="Delete" aria-label={`Delete ${item.title}`}>{Icons.trash}</button>
+          </div>
+        )}
       </div>
 
-      <div className="progress-bar mt-3">
-        <div className="progress-fill" style={{ width: `${displayProgress}%` }} />
-      </div>
+      {!isSeasonEpisodeTracked && (
+        <div className="progress-bar mt-3">
+          <div className="progress-fill" style={{ width: `${displayProgress}%` }} />
+        </div>
+      )}
       <div className="progress-label">
         <span>{progressLabel}</span>
-        <span>{displayProgress >= 100 ? "Finish" : ""}</span>
+        <span>{!isSeasonEpisodeTracked && displayProgress >= 100 ? "Finish" : ""}</span>
       </div>
 
       {item.notes && <p className="diary-notes">"{item.notes}"</p>}
 
-      <div className="flex gap-2 mt-3">
-        <button className="btn btn-ghost btn-sm flex-1" onClick={() => { void handleDemote(); }} disabled={demoting} aria-label={`Move ${item.title} back to wishlist`}>
-          {Icons.undo} {demoting ? "..." : "Wishlist"}
-        </button>
-        <button className="btn btn-accent btn-sm flex-1" onClick={() => { onComplete(); }} aria-label={`Complete ${item.title}`}>
-          {Icons.check} Finish
-        </button>
-      </div>
+      {!readOnly && (
+        <div className="flex gap-2 mt-3">
+          <button className="btn btn-ghost btn-sm flex-1" onClick={() => { void handleDemote(); }} disabled={demoting} aria-label={`Move ${item.title} back to wishlist`}>
+            {Icons.undo} {demoting ? "..." : "Wishlist"}
+          </button>
+          <button className="btn btn-accent btn-sm flex-1" onClick={() => { onComplete(); }} aria-label={`Complete ${item.title}`}>
+            {Icons.check} Finish
+          </button>
+        </div>
+      )}
 
-      {showConfirm && (
+      {!readOnly && showConfirm && (
         <div className="confirm-overlay" onClick={(e) => e.stopPropagation()}>
           <p className="margin-note">Delete?</p>
           <div className="flex gap-2">
@@ -2152,9 +2276,10 @@ function CurrentlyCard({
 type ImportedRow =
   | { status: "library"; title: string; type: MediaType; date: number; notes?: string; posterUrl?: string; headRating: number; heartRating: number }
   | { status: "wishlist"; title: string; type: MediaType; date: number; notes?: string; posterUrl?: string }
-  | { status: "currently"; title: string; type: MediaType; date: number; notes?: string; posterUrl?: string; progress: number; totalPages?: number; totalEpisodes?: number };
+  | { status: "currently"; title: string; type: MediaType; date: number; notes?: string; posterUrl?: string; progress: number; totalPages?: number; totalEpisodes?: number; currentSeason?: number; currentEpisode?: number };
 
-const csvHeaders = ["status", "title", "type", "headRating", "heartRating", "date", "notes", "posterUrl", "progress", "totalPages", "totalEpisodes"] as const;
+const csvHeaders = ["status", "title", "type", "headRating", "heartRating", "date", "notes", "posterUrl", "progress", "totalPages", "totalEpisodes", "currentSeason", "currentEpisode"] as const;
+const requiredCsvHeaders = csvHeaders.slice(0, 11);
 
 function parseCsvRecords(text: string): string[][] {
   const records: string[][] = [];
@@ -2180,7 +2305,7 @@ function parseCsvRecords(text: string): string[][] {
 function parseCanonicalCsv(text: string): ImportedRow[] {
   const records = parseCsvRecords(text);
   const header = records.shift()?.map((value) => value.trim());
-  if (!header || !csvHeaders.every((key) => header.includes(key))) {
+  if (!header || !requiredCsvHeaders.every((key) => header.includes(key))) {
     throw new Error("Use a Head & Heart export CSV with the canonical header.");
   }
   const cell = (row: string[], name: typeof csvHeaders[number]) => row[header.indexOf(name)]?.trim() ?? "";
@@ -2198,11 +2323,21 @@ function parseCanonicalCsv(text: string): ImportedRow[] {
       return [{ status, ...common, headRating, heartRating }];
     }
     if (status === "currently") {
-      const number = (name: "progress" | "totalPages" | "totalEpisodes") => {
-        const value = Number(cell(row, name));
+      const number = (name: "progress" | "totalPages" | "totalEpisodes" | "currentSeason" | "currentEpisode") => {
+        const raw = cell(row, name);
+        if (!raw) return undefined;
+        const value = Number(raw);
         return Number.isFinite(value) ? value : undefined;
       };
-      return [{ status, ...common, progress: number("progress") ?? 0, totalPages: number("totalPages"), totalEpisodes: number("totalEpisodes") }];
+      return [{
+        status,
+        ...common,
+        progress: number("progress") ?? 0,
+        totalPages: number("totalPages"),
+        totalEpisodes: number("totalEpisodes"),
+        currentSeason: number("currentSeason"),
+        currentEpisode: number("currentEpisode"),
+      }];
     }
     return [{ status: "wishlist", ...common }];
   });

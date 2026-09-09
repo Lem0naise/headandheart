@@ -22,7 +22,7 @@ type UnifiedMedia = (MediaEntry | WishlistItem | CurrentlyItem) & {
 };
 
 function buildCsv(items: readonly UnifiedMedia[]): string {
-  const header = "status,title,type,headRating,heartRating,date,notes,posterUrl,progress,totalPages,totalEpisodes";
+  const header = "status,title,type,headRating,heartRating,date,notes,posterUrl,progress,totalPages,totalEpisodes,currentSeason,currentEpisode";
   const rows = items.map((item) => {
     const library = item.status === "library" ? item as MediaEntry : null;
     const current = item.status === "currently" ? item as CurrentlyItem : null;
@@ -39,6 +39,8 @@ function buildCsv(items: readonly UnifiedMedia[]): string {
       current?.progress ?? "",
       current?.totalPages ?? "",
       current?.totalEpisodes ?? "",
+      current?.currentSeason ?? "",
+      current?.currentEpisode ?? "",
     ].join(",");
   });
   return [header, ...rows].join("\n");

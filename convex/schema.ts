@@ -62,6 +62,8 @@ export default defineSchema({
         notes: v.optional(v.string()),
         totalPages: v.optional(v.number()), // for books: total page count
         totalEpisodes: v.optional(v.number()), // for TV shows: total episode count
+        currentSeason: v.optional(v.number()), // for TV shows: current season
+        currentEpisode: v.optional(v.number()), // for TV shows: current episode
         posterUrl: v.optional(v.string()),
     })
         .index("by_user", ["userId"])

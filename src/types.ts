@@ -31,6 +31,8 @@ export interface CurrentlyItem {
   notes?: string;
   totalPages?: number;
   totalEpisodes?: number;
+  currentSeason?: number;
+  currentEpisode?: number;
   posterUrl?: string;
 }
 

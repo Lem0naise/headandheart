@@ -35,6 +35,8 @@ const importedRowValidator = v.union(
     progress: v.number(),
     totalPages: v.optional(v.number()),
     totalEpisodes: v.optional(v.number()),
+    currentSeason: v.optional(v.number()),
+    currentEpisode: v.optional(v.number()),
   }),
 );
 
@@ -84,7 +86,8 @@ export const importMediaRows = mutation({
         await ctx.db.insert("currentlyItems", {
           userId, title: row.title, type: row.type, dateStarted: row.date,
           progress: row.progress, totalPages: row.totalPages,
-          totalEpisodes: row.totalEpisodes, notes: row.notes, posterUrl: row.posterUrl,
+          totalEpisodes: row.totalEpisodes, currentSeason: row.currentSeason,
+          currentEpisode: row.currentEpisode, notes: row.notes, posterUrl: row.posterUrl,
         });
       }
       imported++;
